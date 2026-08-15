@@ -4,5 +4,5 @@
     <RedBoltExternalPackageRepositoryUrl>https://github.com/RedBoltFramework/RedBolt.PhysicsJolt.git</RedBoltExternalPackageRepositoryUrl>
     <RedBoltExternalPackageTags>RedBolt game-engine csharp dotnet jolt physics</RedBoltExternalPackageTags>
   </PropertyGroup>
-  <Import Project="../../../RedBolt/src/RedBolt/ExternalModule/NuGetPackage.targets" />
+  <Import Project="../../../RedBolt/src/RedBolt/Build/NuGetPackage.targets" />
 </Project>

@@ -13,5 +13,5 @@
     <_RedBoltExternalWebProject Include="../Native/RedBolt.PhysicsJolt.Native.Web.csproj;../Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj;../PhysicsJolt/RedBolt.PhysicsJolt.csproj;../PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
     <_RedBoltExternalWebProject Include="../Sample/Web/RedBolt.Sample.Web.csproj" Condition="'$(RedBoltSamplesEnabled)' == 'true'" />
   </ItemGroup>
-  <Import Project="$(RedBoltRoot)/src/RedBolt/ExternalModule/Build.targets" />
+  <Import Project="$(RedBoltRoot)/src/RedBolt/Build/Build.targets" />
 </Project>

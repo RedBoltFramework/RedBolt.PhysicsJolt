@@ -1,4 +1,4 @@
 <Project>
   <Import Project="$(MSBuildThisFileDirectory)../../Directory.Build.targets" />
-  <Import Project="$(RedBoltRoot)/src/RedBolt/ExternalModule/Native.targets" />
+  <Import Project="$(RedBoltRoot)/src/RedBolt/Build/Native.targets" />
 </Project>

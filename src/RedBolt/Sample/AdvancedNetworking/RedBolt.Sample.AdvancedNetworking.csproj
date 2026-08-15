@@ -13,7 +13,7 @@
                       GlobalPropertiesToRemove="RedBoltPlatform;RedBoltNativePreset" />
     <ProjectReference Include="../../PhysicsJolt/RedBolt.PhysicsJolt.csproj" />
     <ProjectReference Include="../../PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj" />
-    <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Network/RedBolt.Network.csproj" />
+    <ProjectReference Include="$(RedBoltNetworkRoot)/src/RedBolt/Network/RedBolt.Network.csproj" />
     <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Core/RedBolt.Core.csproj" />
   </ItemGroup>
 </Project>

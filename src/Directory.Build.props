@@ -2,6 +2,7 @@
   <PropertyGroup>
     <RedBoltPhysicsJoltRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RedBoltPhysicsJoltRoot>
     <RedBoltRoot Condition="'$(RedBoltRoot)' == ''">$([System.IO.Path]::GetFullPath('$(RedBoltPhysicsJoltRoot)/../RedBolt'))</RedBoltRoot>
+    <RedBoltNetworkRoot Condition="'$(RedBoltNetworkRoot)' == ''">$([System.IO.Path]::GetFullPath('$(RedBoltPhysicsJoltRoot)/../RedBolt.Network'))</RedBoltNetworkRoot>
     <RedBoltDearImGuiEnabled>true</RedBoltDearImGuiEnabled>
     <RedBoltNetworkEnabled>true</RedBoltNetworkEnabled>
     <RedBoltExternalModuleRoot>$(RedBoltPhysicsJoltRoot)</RedBoltExternalModuleRoot>
@@ -21,7 +22,7 @@
     <RedBoltExternalEnabledNativeModules>JOLT</RedBoltExternalEnabledNativeModules>
     <RedBoltExternalDesktopResourceRoot>$(RedBoltRoot)</RedBoltExternalDesktopResourceRoot>
   </PropertyGroup>
-  <Import Project="$(RedBoltRoot)/src/RedBolt/ExternalModule/Directory.Build.props" />
+  <Import Project="$(RedBoltRoot)/src/RedBolt/Build/Directory.Build.props" />
   <PropertyGroup>
     <RedBoltExternalModuleEnabled>$(RedBoltPhysicsJoltEnabled)</RedBoltExternalModuleEnabled>
     <RedBoltExternalModuleBuildProperties>RedBoltPhysicsJoltEnabled=$(RedBoltPhysicsJoltEnabled)</RedBoltExternalModuleBuildProperties>

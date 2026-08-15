@@ -10,9 +10,9 @@
     <ProjectReference Include="../../PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj" />
     <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/DearImGui/RedBolt.DearImGui.csproj" />
     <Reference Include="RedBolt.Bindings.DearImGui" HintPath="$(RedBoltBaseDearImGuiBindingAssembly)" />
-    <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Network/RedBolt.Network.csproj" />
+    <ProjectReference Include="$(RedBoltNetworkRoot)/src/RedBolt/Network/RedBolt.Network.csproj" />
     <ProjectReference Include="../../Native/RedBolt.PhysicsJolt.Native.Android.csproj" ReferenceOutputAssembly="false" Private="false" PrivateAssets="all" />
     <Compile Include="../AdvancedNetworking/**/*.cs;../CharacterDemo/**/*.cs;../KinematicCharacter/**/*.cs;../Physics/**/*.cs;../RaycastVehicle/**/*.cs;../SceneReplication/**/*.cs" Link="Samples/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
-  <Import Project="$(RedBoltRoot)/src/RedBolt/ExternalModule/AndroidSample.targets" />
+  <Import Project="$(RedBoltRoot)/src/RedBolt/Build/AndroidSample.targets" />
 </Project>

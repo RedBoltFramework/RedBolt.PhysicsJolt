@@ -5,7 +5,7 @@
 
   <ItemGroup>
     <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Core/RedBolt.Core.csproj" />
-    <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Network/RedBolt.Network.csproj" />
+    <ProjectReference Include="$(RedBoltNetworkRoot)/src/RedBolt/Network/RedBolt.Network.csproj" />
     <ProjectReference Include="../PhysicsJolt/RedBolt.PhysicsJolt.csproj" />
     <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Generator/Reflection/RedBolt.Generator.Reflection.csproj"
                       OutputItemType="Analyzer"
