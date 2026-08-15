@@ -44,7 +44,9 @@ endfunction()
 list(PREPEND CMAKE_MODULE_PATH "${REDBOLT_ROOT}/cmake/Modules")
 set(CPM_DONT_UPDATE_MODULE_PATH ON CACHE BOOL "Use RedBolt CMake modules" FORCE)
 set(CPM_SOURCE_CACHE "${REDBOLT_DEPENDENCY_ROOT}" CACHE PATH "CPM source cache" FORCE)
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CPM.cmake")
+unset(CPM_DIRECTORY CACHE)
+unset(CPM_VERSION CACHE)
+include("${REDBOLT_ROOT}/cmake/CPM.cmake")
 set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/deps")
 
 set(SHARPCPP_BUILD_E2E OFF CACHE BOOL "Build SharpCpp E2E" FORCE)
@@ -93,7 +95,7 @@ elseif(CMAKE_BUILD_TYPE MATCHES "^(Release|Distribution|ReleaseASAN|ReleaseUBSAN
 endif()
 set(REDBOLT_BINDING_DEFINES ${_redbolt_jolt_binding_defines})
 
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/RedBoltSharpCpp.cmake")
+include("${REDBOLT_ROOT}/cmake/RedBoltSharpCpp.cmake")
 add_subdirectory(src/RedBolt/Generator/Dependencies)
 add_subdirectory(src/RedBolt/Native/JoltPhysics)
 
@@ -152,7 +154,7 @@ if(EMSCRIPTEN)
             "-DREDBOLT_ARCHIVER=${CMAKE_AR}"
             "-DREDBOLT_MRI_FILE=${REDBOLT_PHYSICS_JOLT_WASM_MRI}"
             "-DREDBOLT_OUTPUT_ARCHIVE=${REDBOLT_PHYSICS_JOLT_WASM_ARCHIVE}"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MergeStaticArchives.cmake"
+            -P "${REDBOLT_ROOT}/cmake/MergeStaticArchives.cmake"
         DEPENDS redbolt-physics-jolt-native-jolt Jolt
         VERBATIM)
     add_custom_target(redbolt-physics-jolt-wasm-native DEPENDS "${REDBOLT_PHYSICS_JOLT_WASM_ARCHIVE}")

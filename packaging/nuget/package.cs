@@ -1,453 +1,67 @@
-using System.Diagnostics;
-using System.IO.Compression;
+#:project ../../../RedBolt/src/RedBolt/ExternalModule/Packaging/RedBolt.ExternalModule.Packaging.csproj
+
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
+using RedBolt.ExternalModule.Packaging;
 
-try
+return ExternalModulePackager.Run(args, new ExternalModulePackageManifest
 {
-    return new Packager(args).Run();
-}
-catch (Exception exception)
-{
-    Console.Error.WriteLine(exception.Message);
-    return 1;
-}
-
-internal sealed class Packager
-{
-    private const string Configuration = "Release";
-    private static readonly string[] DefaultRids = ["linux-x64"];
-    private static readonly HashSet<string> SupportedRids =
+    Name = "RedBolt.PhysicsJolt",
+    BasePackages = ["RedBolt.Core", "RedBolt.Network", "SharpCpp.Std", "SharpCpp.Support"],
+    RequireBaseRuntime = true,
+    SupportedRids = ["linux-x64", "win-x64", "android-x64", "android-arm64", "browser-wasm"],
+    DefaultRids = ["linux-x64"],
+    BuildSteps =
     [
-        "linux-x64", "win-x64", "android-x64", "android-arm64", "browser-wasm"
-    ];
-
-    private readonly string[] _arguments;
-    private readonly string _scriptDirectory;
-    private readonly string _repositoryRoot;
-    private readonly string _redBoltRoot;
-    private readonly string _packageProject;
-    private readonly string _packageRoot;
-    private readonly string _stageRoot;
-    private readonly string _outputRoot;
-    private readonly string _baseOutputRoot;
-    private readonly List<string> _rids = [];
-    private string _packageVersion = "";
-    private string _dependencyVersion = "";
-    private string _redBoltVersion = "";
-    private string _repositoryCommit = "";
-    private bool _skipBuild;
-
-    public Packager(string[] arguments)
-    {
-        _arguments = arguments;
-        _scriptDirectory = Path.GetDirectoryName(GetSourcePath())!;
-        _repositoryRoot = Path.GetFullPath(Path.Combine(_scriptDirectory, "..", ".."));
-        _redBoltRoot = Path.GetFullPath(Path.Combine(_repositoryRoot, "..", "RedBolt"));
-        _packageProject = Path.Combine(_scriptDirectory, "RedBolt.Package.csproj");
-        _packageRoot = Path.Combine(_repositoryRoot, "build", "package", "nuget");
-        _stageRoot = Path.Combine(_packageRoot, "stage");
-        _outputRoot = Path.Combine(_packageRoot, "out");
-        _baseOutputRoot = Path.Combine(_redBoltRoot, "build", "package", "nuget", "out");
-    }
-
-    public int Run()
-    {
-        if (_arguments.Length == 0 || _arguments[0] is not ("create" or "validate" or "version"))
-            return Usage();
-
-        var command = _arguments[0];
-        ParseArguments();
-        _packageVersion = GitVersion();
-        _dependencyVersion = NormalizeDependencyVersion(_packageVersion);
-        if (command == "version")
-        {
-            Console.WriteLine(_packageVersion);
-            return 0;
-        }
-
-        _repositoryCommit = GitOrEmpty("rev-parse", "HEAD").Trim();
-        _redBoltVersion = ResolveRedBoltVersion();
-        VerifyBasePackages();
-
-        if (command == "validate")
-        {
-            ValidatePackages();
-            return 0;
-        }
-
-        if (!_skipBuild)
-            BuildSelectedOutputs();
-
-        RecreateDirectory(_stageRoot);
-        RecreateDirectory(_outputRoot);
-        Directory.CreateDirectory(_packageRoot);
-        File.WriteAllText(Path.Combine(_packageRoot, "version.txt"), _packageVersion + Environment.NewLine);
-        File.WriteAllText(Path.Combine(_packageRoot, "redbolt-version.txt"), _redBoltVersion + Environment.NewLine);
-
-        StageManagedPackages();
-        foreach (var rid in _rids)
-            StageRuntimePackage(rid);
-
-        ValidatePackages();
-        return 0;
-    }
-
-    private void ParseArguments()
-    {
-        for (var index = 1; index < _arguments.Length; ++index)
-        {
-            switch (_arguments[index])
-            {
-                case "--no-build":
-                    _skipBuild = true;
-                    break;
-                case "--rids" when index + 1 < _arguments.Length:
-                    _rids.AddRange(_arguments[++index].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-                    break;
-                case "--redbolt-version" when index + 1 < _arguments.Length:
-                    _redBoltVersion = _arguments[++index];
-                    break;
-                default:
-                    throw new InvalidOperationException("Unknown or incomplete package option: " + _arguments[index]);
-            }
-        }
-
-        if (_rids.Count == 0)
-            _rids.AddRange(DefaultRids);
-        foreach (var rid in _rids)
-        {
-            if (!SupportedRids.Contains(rid))
-                throw new InvalidOperationException($"Unsupported RedBolt.PhysicsJolt runtime identifier '{rid}'.");
-        }
-    }
-
-    private string ResolveRedBoltVersion()
-    {
-        if (!string.IsNullOrWhiteSpace(_redBoltVersion))
-            return NormalizeDependencyVersion(_redBoltVersion);
-
-        var versionFile = Path.Combine(_redBoltRoot, "build", "package", "nuget", "version.txt");
-        var version = File.Exists(versionFile)
-            ? File.ReadAllText(versionFile).Trim()
-            : RunCapture("dotnet", ["run", "--file", Path.Combine(_redBoltRoot, "packaging", "nuget", "package.cs"), "--", "version"]).Trim();
-        return NormalizeDependencyVersion(version);
-    }
-
-    private void VerifyBasePackages()
-    {
-        if (!Directory.Exists(_baseOutputRoot))
-            throw new InvalidOperationException($"Base RedBolt package feed is missing: {_baseOutputRoot}");
-
-        RequirePackage(_baseOutputRoot, "RedBolt.Core", _redBoltVersion);
-        RequirePackage(_baseOutputRoot, "RedBolt.Network", _redBoltVersion);
-        RequirePackage(_baseOutputRoot, "SharpCpp.Std", _redBoltVersion);
-        RequirePackage(_baseOutputRoot, "SharpCpp.Support", _redBoltVersion);
-        foreach (var rid in _rids)
-            RequirePackage(_baseOutputRoot, $"RedBolt.Core.Runtime.{rid}", _redBoltVersion);
-    }
-
-    private void BuildSelectedOutputs()
-    {
-        var baseCore = Path.Combine(_redBoltRoot, "build", "bin", Configuration, "linux-x64", "core", "RedBolt.Core.dll");
-        if (!File.Exists(baseCore))
-            throw new InvalidOperationException($"Build the matching base RedBolt Release outputs first: {baseCore}");
-
-        if (_rids.Contains("linux-x64"))
-        {
-            RunCommand("dotnet", ["build", Project("Native", "RedBolt.PhysicsJolt.Native.csproj"), "--configuration", Configuration, "-m:4"]);
-            RunCommand("dotnet", ["build", Project("Native", "JoltPhysics", "RedBolt.Bindings.Jolt.csproj"), "--configuration", Configuration, "--no-restore", "-m:4"]);
-            RunCommand("dotnet", ["build", Project("PhysicsJolt", "RedBolt.PhysicsJolt.csproj"), "--configuration", Configuration, "--no-restore", "-m:4", "-p:BuildProjectReferences=false"]);
-            RunCommand("dotnet", ["build", Project("PhysicsJolt.Network", "RedBolt.PhysicsJolt.Network.csproj"), "--configuration", Configuration, "--no-restore", "-m:4", "-p:BuildProjectReferences=false"]);
-        }
-        if (_rids.Contains("win-x64"))
-        {
-            RunCommand("dotnet",
-            [
-                "build", Project("PhysicsJolt", "RedBolt.PhysicsJolt.csproj"), "--configuration", Configuration,
-                "-m:4",
-                "-p:RedBoltPlatform=win-x64", "-p:RedBoltNativePreset=win-x64"
-            ]);
-        }
-        if (_rids.Contains("browser-wasm"))
-            RunCommand("dotnet", ["build", Project("Sample", "Web", "RedBolt.Sample.Web.csproj"), "--configuration", Configuration, "-m:4", "-p:RedBoltEnablePlatforms=web"]);
-        if (_rids.Any(rid => rid.StartsWith("android-", StringComparison.Ordinal)))
-        {
-            RunCommand("dotnet",
-            [
-                "build", Project("Sample", "Android", "RedBolt.Sample.Android.csproj"),
-                "--configuration", Configuration, "--framework", "net10.0-android", "-m:4",
-                "-p:RedBoltEnablePlatforms=android", "-p:RedBoltEnableArchitectures=all"
-            ]);
-        }
-    }
-
-    private void StageManagedPackages()
-    {
-        var managedRoot = Path.Combine(_repositoryRoot, "build", "bin", Configuration, "linux-x64");
-        var physicsStage = PrepareStage("RedBolt.PhysicsJolt");
-        CopyRequired(Path.Combine(managedRoot, "core", "RedBolt.PhysicsJolt.dll"), Path.Combine(physicsStage, "lib", "net10.0", "RedBolt.PhysicsJolt.dll"));
-        CopyRequired(Path.Combine(managedRoot, "extern", "RedBolt.Bindings.Jolt.dll"), Path.Combine(physicsStage, "lib", "net10.0", "RedBolt.Bindings.Jolt.dll"));
-        Pack("RedBolt.PhysicsJolt", "Jolt 3D physics integration for RedBolt.", physicsStage,
-        [
-            ("RedBolt.Core", _redBoltVersion),
-            ("SharpCpp.Std", _redBoltVersion),
-            ("SharpCpp.Support", _redBoltVersion)
-        ]);
-
-        var networkStage = PrepareStage("RedBolt.PhysicsJolt.Network");
-        CopyRequired(Path.Combine(managedRoot, "core", "RedBolt.PhysicsJolt.Network.dll"),
-            Path.Combine(networkStage, "lib", "net10.0", "RedBolt.PhysicsJolt.Network.dll"));
-        Pack("RedBolt.PhysicsJolt.Network", "Jolt-aware networking helpers for RedBolt.", networkStage,
-        [
-            ("RedBolt.PhysicsJolt", _dependencyVersion),
-            ("RedBolt.Network", _redBoltVersion)
-        ]);
-    }
-
-    private void StageRuntimePackage(string rid)
-    {
-        var packageId = $"RedBolt.PhysicsJolt.Runtime.{rid}";
-        var stage = PrepareStage(packageId);
-        if (rid == "browser-wasm")
-        {
-            var archive = Path.Combine(_repositoryRoot, "build", "native", rid, "lib", "Release", "wasm", "RedBolt.PhysicsJolt.Native.Web.a");
-            CopyRequired(archive, Path.Combine(stage, "buildTransitive", "native", Path.GetFileName(archive)));
-            File.WriteAllText(Path.Combine(stage, "buildTransitive", packageId + ".targets"), """
-                <Project>
-                  <ItemGroup>
-                    <NativeFileReference Include="$(MSBuildThisFileDirectory)native/RedBolt.PhysicsJolt.Native.Web.a" />
-                  </ItemGroup>
-                </Project>
-                """);
-        }
-        else
-        {
-            var nativeRoot = Path.Combine(_repositoryRoot, "build", "bin", Configuration, rid, "extern", "runtimes", rid, "native");
-            var nativeFiles = Directory.Exists(nativeRoot)
-                ? Directory.GetFiles(nativeRoot, "*RedBolt.Native.Jolt*", SearchOption.TopDirectoryOnly)
-                : [];
-            if (nativeFiles.Length == 0)
-                throw new InvalidOperationException($"The Jolt native runtime for {rid} is missing below {nativeRoot}.");
-            foreach (var file in nativeFiles)
-                CopyRequired(file, Path.Combine(stage, "runtimes", rid, "native", Path.GetFileName(file)));
-        }
-
-        Pack(packageId, $"RedBolt.PhysicsJolt native runtime for {rid}.", stage,
-        [
-            ("RedBolt.PhysicsJolt", _dependencyVersion),
-            ($"RedBolt.Core.Runtime.{rid}", _redBoltVersion)
-        ]);
-    }
-
-    private string PrepareStage(string packageId)
-    {
-        var stage = Path.Combine(_stageRoot, packageId);
-        RecreateDirectory(stage);
-        File.Copy(Path.Combine(_scriptDirectory, "README.md"), Path.Combine(stage, "README.md"), true);
-        return stage;
-    }
-
-    private void Pack(string packageId, string description, string stage, IReadOnlyList<(string Id, string Version)> dependencies)
-    {
-        var spec = Path.Combine(stage, "package.props");
-        var project = new XElement("Project");
-        if (dependencies.Count != 0)
-        {
-            project.Add(new XElement("ItemGroup",
-                dependencies.Select(dependency => new XElement("PackageReference",
-                    new XAttribute("Include", dependency.Id),
-                    new XAttribute("Version", $"[{dependency.Version}]")))));
-        }
-        new XDocument(project).Save(spec);
-
-        var properties = new[]
-        {
-            $"-p:RedBoltPackageId={packageId}",
-            $"-p:RedBoltPackageVersion={_packageVersion}",
-            $"-p:RedBoltPackageDescription={description}",
-            $"-p:RedBoltRepositoryCommit={_repositoryCommit}",
-            $"-p:RedBoltPackageStage={stage}",
-            $"-p:RedBoltPackageSpec={spec}",
-            $"-p:RestoreSources={_outputRoot};{_baseOutputRoot};https://api.nuget.org/v3/index.json"
-        };
-        RunCommand("dotnet", ["restore", _packageProject, .. properties]);
-        RunCommand("dotnet",
-        [
-            "pack", _packageProject, "--configuration", Configuration, "--no-build", "--no-restore",
-            "--output", _outputRoot,
-            .. properties
-        ]);
-    }
-
-    private void ValidatePackages()
-    {
-        var expected = new List<string>
-        {
+        new("Native/RedBolt.PhysicsJolt.Native.csproj", BuildWhen.Linux),
+        new("Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj", BuildWhen.Linux, true),
+        new("PhysicsJolt/RedBolt.PhysicsJolt.csproj", BuildWhen.Linux, true, "-p:BuildProjectReferences=false"),
+        new("PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj", BuildWhen.Linux, true, "-p:BuildProjectReferences=false"),
+        new("PhysicsJolt/RedBolt.PhysicsJolt.csproj", BuildWhen.Windows, false,
+            "-p:RedBoltPlatform=win-x64", "-p:RedBoltNativePreset=win-x64"),
+        new("Sample/Web/RedBolt.Sample.Web.csproj", BuildWhen.Web, false, "-p:RedBoltEnablePlatforms=web"),
+        new("Sample/Android/RedBolt.Sample.Android.csproj", BuildWhen.Android, false,
+            "--framework", "net10.0-android", "-p:RedBoltEnablePlatforms=android", "-p:RedBoltEnableArchitectures=all")
+    ],
+    ManagedPackages =
+    [
+        new(
             "RedBolt.PhysicsJolt",
-            "RedBolt.PhysicsJolt.Network"
-        };
-        expected.AddRange(_rids.Select(rid => $"RedBolt.PhysicsJolt.Runtime.{rid}"));
-        foreach (var id in expected)
-            RequirePackage(_outputRoot, id, _dependencyVersion);
-
-        foreach (var id in expected)
-        {
-            using var archive = ZipFile.OpenRead(RequirePackage(_outputRoot, id, _dependencyVersion));
-            var nuspec = ReadNuspec(archive);
-            foreach (var dependency in nuspec.Descendants().Where(element => element.Name.LocalName == "dependency"))
-            {
-                var dependencyId = dependency.Attribute("id")?.Value ?? "";
-                if (!dependencyId.StartsWith("RedBolt", StringComparison.Ordinal)
-                    && !dependencyId.StartsWith("SharpCpp", StringComparison.Ordinal))
-                    continue;
-                var expectedVersion = dependencyId.StartsWith("RedBolt.PhysicsJolt", StringComparison.Ordinal)
-                    ? _dependencyVersion
-                    : _redBoltVersion;
-                if (dependency.Attribute("version")?.Value != $"[{expectedVersion}]")
-                    throw new InvalidOperationException($"{id} does not pin {dependencyId} to [{expectedVersion}].");
-            }
-        }
-
-        if (_rids.Contains("linux-x64"))
-            ValidateConsumer();
-        Console.WriteLine($"Validated {expected.Count} RedBolt.PhysicsJolt packages at {_packageVersion} against RedBolt {_redBoltVersion}.");
-    }
-
-    private void ValidateConsumer()
-    {
-        var root = Path.Combine(_packageRoot, "consumer");
-        RecreateDirectory(root);
-        File.WriteAllText(Path.Combine(root, "Consumer.csproj"), $"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <OutputType>Exe</OutputType>
-                <TargetFramework>net10.0</TargetFramework>
-                <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
-              </PropertyGroup>
-              <ItemGroup>
-                <PackageReference Include="RedBolt.PhysicsJolt.Runtime.linux-x64" Version="[{_dependencyVersion}]" />
-              </ItemGroup>
-            </Project>
-            """);
-        File.WriteAllText(Path.Combine(root, "Program.cs"), """
-            using System;
-            using RedBolt.PhysicsJolt;
-            Console.WriteLine(typeof(PhysicsWorld).FullName);
-            """);
-        RunCommand("dotnet",
+            "Jolt 3D physics integration for RedBolt.",
+            [
+                new("build/bin/Release/linux-x64/core/RedBolt.PhysicsJolt.dll", "lib/net10.0/RedBolt.PhysicsJolt.dll"),
+                new("build/bin/Release/linux-x64/extern/RedBolt.Bindings.Jolt.dll", "lib/net10.0/RedBolt.Bindings.Jolt.dll")
+            ],
+            [
+                new("RedBolt.Core", PackageVersions.RedBolt),
+                new("SharpCpp.Std", PackageVersions.RedBolt),
+                new("SharpCpp.Support", PackageVersions.RedBolt)
+            ]),
+        new(
+            "RedBolt.PhysicsJolt.Network",
+            "Jolt-aware networking helpers for RedBolt.",
+            [new("build/bin/Release/linux-x64/core/RedBolt.PhysicsJolt.Network.dll", "lib/net10.0/RedBolt.PhysicsJolt.Network.dll")],
+            [
+                new("RedBolt.PhysicsJolt", PackageVersions.Module),
+                new("RedBolt.Network", PackageVersions.RedBolt)
+            ])
+    ],
+    RuntimePackage = new(
+        "RedBolt.PhysicsJolt.Runtime",
+        "Jolt",
+        "*RedBolt.Native.Jolt*",
+        "build/native/{rid}/lib/Release/wasm/RedBolt.PhysicsJolt.Native.Web.a",
         [
-            "build", Path.Combine(root, "Consumer.csproj"),
-            "--configuration", Configuration,
-            $"-p:RestoreSources={_outputRoot};{_baseOutputRoot};https://api.nuget.org/v3/index.json"
-        ]);
-    }
+            new("RedBolt.PhysicsJolt", PackageVersions.Module),
+            new("RedBolt.Core.Runtime.{rid}", PackageVersions.RedBolt)
+        ]),
+    Consumer = new(
+        "RedBolt.PhysicsJolt.Runtime.linux-x64",
+        """
+        using System;
+        using RedBolt.PhysicsJolt;
+        Console.WriteLine(typeof(PhysicsWorld).FullName);
+        """,
+        OnlyWithLinuxRuntime: true)
+}, SourcePath());
 
-    private string RequirePackage(string feed, string id, string version)
-    {
-        if (!Directory.Exists(feed))
-            throw new InvalidOperationException($"Package feed is missing: {feed}");
-        foreach (var path in Directory.GetFiles(feed, "*.nupkg", SearchOption.TopDirectoryOnly))
-        {
-            using var archive = ZipFile.OpenRead(path);
-            var nuspec = ReadNuspec(archive);
-            var candidateId = nuspec.Descendants().First(element => element.Name.LocalName == "id").Value;
-            var candidateVersion = NormalizeDependencyVersion(
-                nuspec.Descendants().First(element => element.Name.LocalName == "version").Value);
-            if (candidateId == id && candidateVersion == version)
-                return path;
-        }
-        throw new InvalidOperationException($"Required package {id} [{version}] is missing from {feed}.");
-    }
-
-    private static XDocument ReadNuspec(ZipArchive archive)
-    {
-        var entry = archive.Entries.Single(candidate => candidate.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
-
-    private string Project(params string[] parts) =>
-        Path.Combine([_repositoryRoot, "src", "RedBolt", .. parts]);
-
-    private static void CopyRequired(string source, string destination)
-    {
-        if (!File.Exists(source))
-            throw new InvalidOperationException("Required package input is missing: " + source);
-        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        File.Copy(source, destination, true);
-    }
-
-    private static void RecreateDirectory(string path)
-    {
-        if (Directory.Exists(path))
-            Directory.Delete(path, true);
-        Directory.CreateDirectory(path);
-    }
-
-    private string GitVersion()
-    {
-        var commit = GitOrEmpty("rev-parse", "--short=8", "HEAD").Trim();
-        if (commit.Length == 0)
-            return "0.1.0-dev.0+working";
-        var exactTag = GitOrEmpty("describe", "--tags", "--exact-match", "--match", "v[0-9]*").Trim();
-        if (Regex.IsMatch(exactTag, "^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
-            return exactTag[1..];
-        var heightText = GitOrEmpty("rev-list", "--count", "HEAD").Trim();
-        var height = int.TryParse(heightText, out var parsedHeight) ? parsedHeight : 0;
-        var dirty = GitOrEmpty("status", "--porcelain").Length == 0 ? "" : ".dirty";
-        return $"0.1.0-dev.{height}{dirty}+{commit}";
-    }
-
-    private string GitOrEmpty(params string[] arguments)
-    {
-        try { return RunCapture("git", ["-C", _repositoryRoot, .. arguments]); }
-        catch { return ""; }
-    }
-
-    private static string NormalizeDependencyVersion(string version)
-    {
-        var normalized = version.Trim();
-        var metadata = normalized.IndexOf('+');
-        return metadata < 0 ? normalized : normalized[..metadata];
-    }
-
-    private static string RunCapture(string fileName, IReadOnlyList<string> arguments)
-    {
-        var startInfo = CreateStartInfo(fileName, arguments);
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
-        using var process = Process.Start(startInfo)!;
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{fileName} failed: {error.Trim()}");
-        return output;
-    }
-
-    private static void RunCommand(string fileName, IReadOnlyList<string> arguments)
-    {
-        using var process = Process.Start(CreateStartInfo(fileName, arguments))!;
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{fileName} exited with code {process.ExitCode}.");
-    }
-
-    private static ProcessStartInfo CreateStartInfo(string fileName, IReadOnlyList<string> arguments)
-    {
-        var startInfo = new ProcessStartInfo(fileName) { UseShellExecute = false };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
-        return startInfo;
-    }
-
-    private static string GetSourcePath([CallerFilePath] string sourcePath = "") => sourcePath;
-
-    private static int Usage()
-    {
-        Console.Error.WriteLine("Usage: dotnet run --file packaging/nuget/package.cs -- <create|validate|version> [--no-build] [--rids RID,...] [--redbolt-version VERSION] [--redbolt-2d-version VERSION]");
-        return 2;
-    }
-}
+static string SourcePath([CallerFilePath] string path = "") => path;

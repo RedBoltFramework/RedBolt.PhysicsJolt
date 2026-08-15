@@ -1,18 +1,3 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <EnableDefaultItems>false</EnableDefaultItems>
-    <AssemblyName>RedBolt.PhysicsJolt.Native.Web.Build</AssemblyName>
-    <CopyBuildOutputToOutputDirectory>false</CopyBuildOutputToOutputDirectory>
-    <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
-    <GenerateDependencyFile>false</GenerateDependencyFile>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="$(RedBoltSharpCppRoot)/native/SharpCpp.Native/SharpCpp.Native.csproj"
-                      ReferenceOutputAssembly="false" Private="false" PrivateAssets="all"
-                      AdditionalProperties="$(RedBoltSharpCppNativeProperties)" />
-    <ProjectReference Include="../Generator/Dependencies/RedBolt.PhysicsJolt.Generator.Dependencies.csproj"
-                      ReferenceOutputAssembly="false" Private="false" PrivateAssets="all"
-                      GlobalPropertiesToRemove="RedBoltPlatform;RedBoltNativePreset" />
-  </ItemGroup>
-  <Import Project="RedBolt.PhysicsJolt.Native.targets" />
+  <Import Project="$(RedBoltRoot)/src/RedBolt/ExternalModule/NativeBuildProject.targets" />
 </Project>

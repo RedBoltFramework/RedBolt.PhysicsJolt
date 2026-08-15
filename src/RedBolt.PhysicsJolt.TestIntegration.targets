@@ -1,20 +1,6 @@
 <Project>
-  <ItemGroup Condition="('$(RedBoltPlatform)' == 'linux-x64' or '$(RedBoltPlatform)' == 'win-x64') and '$(IsTestProject)' == 'true'">
-    <AdditionalProbingPath Include="$(RedBoltPhysicsJoltRoot)/build/bin/$(Configuration)/$(RedBoltPlatform)/core" />
-    <AdditionalProbingPath Include="$(RedBoltPhysicsJoltRoot)/build/bin/$(Configuration)/$(RedBoltPlatform)/extern" />
-    <AdditionalProbingPath Include="$(RedBoltPhysicsJoltRoot)/build/bin/$(Configuration)/host/extern" />
-    <AdditionalProbingPath Include="$(RedBoltPhysicsJoltRoot)/build/bin/$(Configuration)/host/tools" />
+  <ItemGroup>
+    <RedBoltExternalTestModule Include="$(RedBoltPhysicsJoltRoot)" HasNative="true" />
   </ItemGroup>
-  <Target Name="RedBoltPhysicsJoltConfigureTestRuntimeAssemblies"
-          AfterTargets="RedBoltConfigureRuntimeAssemblies"
-          Condition="('$(RedBoltPlatform)' == 'linux-x64' or '$(RedBoltPlatform)' == 'win-x64') and '$(IsTestProject)' == 'true' and Exists('$(ProjectDepsFilePath)')">
-    <RedBoltUseParentRuntimeAssemblies
-        DependencyFile="$(ProjectDepsFilePath)"
-        MainProjectName="$(AssemblyName)"
-        NativeRuntimeDirectory="$(RedBoltPhysicsJoltRoot)/build/bin/$(Configuration)/$(RedBoltPlatform)/extern/runtimes/$(RedBoltPlatform)/native"
-        NativeModuleManifestDirectory="$(RedBoltPhysicsJoltRoot)/build/native/$(RedBoltPlatform)/generated/native-modules/$(Configuration)"
-        RuntimeIdentifier="$(RuntimeIdentifier)">
-      <Output TaskParameter="NativeAssets" ItemName="_RedBoltNativeAssets" />
-    </RedBoltUseParentRuntimeAssemblies>
-  </Target>
+  <Import Project="$(RedBoltRoot)/src/RedBolt/ExternalModule/TestIntegration.targets" Condition="'$(RedBoltExternalTestIntegrationImported)' != 'true'" />
 </Project>
