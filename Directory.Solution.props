@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <RedBoltPhysicsJoltRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory).'))</RedBoltPhysicsJoltRoot>
+    <RedBoltRoot Condition="'$(RedBoltRoot)' == ''">$([System.IO.Path]::GetFullPath('$(RedBoltPhysicsJoltRoot)/../RedBolt'))</RedBoltRoot>
+    <RedBoltDearImGuiEnabled>true</RedBoltDearImGuiEnabled>
+    <RedBoltNetworkEnabled>true</RedBoltNetworkEnabled>
+  </PropertyGroup>
+  <Import Project="$(RedBoltRoot)/Directory.Solution.props" />
+  <PropertyGroup>
+    <RedBoltTraversalProject>$(RedBoltPhysicsJoltRoot)/src/RedBolt/Build/RedBolt.PhysicsJolt.Build.csproj</RedBoltTraversalProject>
+    <RedBoltSolutionBuildRoot>$(RedBoltPhysicsJoltRoot)/build</RedBoltSolutionBuildRoot>
+    <RedBoltBuildConfigPath>$(RedBoltPhysicsJoltRoot)/build/BuildConfig.props</RedBoltBuildConfigPath>
+  </PropertyGroup>
+</Project>

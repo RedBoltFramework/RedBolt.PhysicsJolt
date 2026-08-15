@@ -1,0 +1,32 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)../../Directory.Build.targets" />
+  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('RedBolt.Bindings.'))">
+    <ProjectReference Include="$(RedBoltSharpCppRoot)/src/SharpCpp.Std/SharpCpp.Std.csproj"
+                      PrivateAssets="all"
+                      AdditionalProperties="$(RedBoltSharpCppManagedProperties)" />
+    <ProjectReference Include="$(RedBoltSharpCppRoot)/src/SharpCpp.Support/SharpCpp.Support.csproj"
+                      PrivateAssets="all"
+                      AdditionalProperties="$(RedBoltSharpCppManagedProperties)" />
+    <ProjectReference Include="$(RedBoltPhysicsJoltRoot)/src/RedBolt/Native/RedBolt.PhysicsJolt.Native.csproj"
+                      Condition="'$(RedBoltPlatform)' == 'linux-x64' or '$(RedBoltPlatform)' == 'win-x64'"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+    <ProjectReference Include="$(RedBoltPhysicsJoltRoot)/src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Web.csproj"
+                      Condition="'$(RedBoltPlatform)' == 'browser-wasm'"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+    <ProjectReference Include="$(RedBoltPhysicsJoltRoot)/src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Android.csproj"
+                      Condition="$([System.String]::Copy('$(RedBoltPlatform)').StartsWith('android-'))"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all"
+                      AdditionalProperties="RedBoltPlatform=$(RedBoltPlatform);RedBoltNativePreset=$(RedBoltNativePreset);RedBoltTargetFramework=$(RedBoltTargetFramework);AndroidSdkDirectory=$(AndroidSdkDirectory);AndroidNdkDirectory=$(AndroidNdkDirectory);JavaSdkDirectory=$(JavaSdkDirectory)" />
+  </ItemGroup>
+  <Target Name="RedBoltPhysicsJoltIncludeGeneratedBindings" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Compile Include="$(RedBoltGeneratedBindingsDir)/jolt/**/*.g.cs"
+               Exclude="@(Compile)"
+               LinkBase="Generated"
+               Condition="'$(MSBuildProjectName)' == 'RedBolt.Bindings.Jolt'" />
+    </ItemGroup>
+  </Target>
+</Project>

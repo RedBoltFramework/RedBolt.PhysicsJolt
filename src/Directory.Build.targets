@@ -1,0 +1,42 @@
+<Project>
+  <Import Project="$(RedBoltRoot)/src/Directory.Build.targets" />
+
+  <ItemGroup Condition="('$(RedBoltPlatform)' == 'linux-x64' or '$(RedBoltPlatform)' == 'win-x64') and ('$(OutputType)' == 'Exe' or '$(IsTestProject)' == 'true')">
+    <AdditionalProbingPath Include="$(RedBoltRoot)/build/bin/$(Configuration)/$(RedBoltPlatform)/core" />
+    <AdditionalProbingPath Include="$(RedBoltRoot)/build/bin/$(Configuration)/$(RedBoltPlatform)/extern" />
+    <AdditionalProbingPath Include="$(RedBoltRoot)/build/bin/$(Configuration)/host/extern" />
+    <AdditionalProbingPath Include="$(RedBoltRoot)/build/bin/$(Configuration)/host/tools" />
+  </ItemGroup>
+
+  <Target Name="RedBoltPhysicsJoltConfigureBaseRuntimeAssemblies"
+          BeforeTargets="RedBoltConfigureRuntimeAssemblies"
+          Condition="('$(RedBoltPlatform)' == 'linux-x64' or '$(RedBoltPlatform)' == 'win-x64') and ('$(OutputType)' == 'Exe' or '$(IsTestProject)' == 'true') and Exists('$(ProjectDepsFilePath)')">
+    <RedBoltUseParentRuntimeAssemblies
+        DependencyFile="$(ProjectDepsFilePath)"
+        MainProjectName="$(AssemblyName)"
+        NativeRuntimeDirectory="$(RedBoltRoot)/build/bin/$(Configuration)/$(RedBoltPlatform)/extern/runtimes/$(RedBoltPlatform)/native"
+        NativeModuleManifestDirectory="$(RedBoltRoot)/build/native/$(RedBoltPlatform)/generated/native-modules/$(Configuration)"
+        RuntimeIdentifier="$(RuntimeIdentifier)">
+      <Output TaskParameter="NativeAssets" ItemName="_RedBoltNativeAssets" />
+    </RedBoltUseParentRuntimeAssemblies>
+  </Target>
+
+  <Target Name="RedBoltPhysicsJoltConfigureProjectReferences"
+          BeforeTargets="AssignProjectConfiguration"
+          DependsOnTargets="IncludeTransitiveProjectReferences">
+    <ItemGroup>
+      <ProjectReference Update="@(ProjectReference)"
+                        Condition="$([System.String]::Copy('%(ProjectReference.FullPath)').StartsWith('$(RedBoltRoot)/src/RedBolt/'))">
+        <AdditionalProperties>%(ProjectReference.AdditionalProperties);RedBoltDearImGuiEnabled=true;RedBoltUtilityEnabled=true;RedBoltIKEnabled=true;RedBoltNetworkEnabled=true</AdditionalProperties>
+      </ProjectReference>
+      <ProjectReference Update="@(ProjectReference)"
+                        Condition="'$(RedBoltPlatform)' == 'browser-wasm' and '%(ProjectReference.AdditionalProperties)' == '' and $([System.String]::Copy('%(ProjectReference.FullPath)').StartsWith('$(RedBoltPhysicsJoltRoot)/src/RedBolt/')) and '%(ProjectReference.Filename)' != 'RedBolt.PhysicsJolt.Generator.Dependencies' and '%(ProjectReference.Filename)' != 'RedBolt.PhysicsJolt.Native.Web'">
+        <AdditionalProperties>RedBoltPlatform=browser-wasm;RedBoltNativePreset=browser-wasm</AdditionalProperties>
+      </ProjectReference>
+      <ProjectReference Update="@(ProjectReference)"
+                        Condition="$([System.String]::Copy('$(RedBoltPlatform)').StartsWith('android-')) and '%(ProjectReference.AdditionalProperties)' == '' and $([System.String]::Copy('%(ProjectReference.FullPath)').StartsWith('$(RedBoltPhysicsJoltRoot)/src/RedBolt/')) and '%(ProjectReference.Filename)' != 'RedBolt.PhysicsJolt.Generator.Dependencies' and '%(ProjectReference.Filename)' != 'RedBolt.PhysicsJolt.Native.Android'">
+        <AdditionalProperties>RedBoltPlatform=$(RedBoltPlatform);RedBoltNativePreset=$(RedBoltNativePreset);RedBoltTargetFramework=$(RedBoltTargetFramework)</AdditionalProperties>
+      </ProjectReference>
+    </ItemGroup>
+  </Target>
+</Project>

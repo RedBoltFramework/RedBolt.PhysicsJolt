@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="$(RedBoltRoot)/src/RedBolt.ProjectEligibility.targets" />
+  <PropertyGroup>
+    <_RedBoltProjectModuleEnabled Condition="'$(MSBuildProjectName)' == 'RedBolt.PhysicsJolt' or '$(MSBuildProjectName)' == 'RedBolt.PhysicsJolt.Network' or '$(MSBuildProjectName)' == 'RedBolt.Bindings.Jolt'">$(RedBoltPhysicsJoltEnabled)</_RedBoltProjectModuleEnabled>
+    <RedBoltProjectBuildEnabled Condition="'$(_RedBoltProjectPlatformEnabled)' == 'true' and '$(_RedBoltProjectPlatformSupported)' == 'true' and '$(_RedBoltProjectModuleEnabled)' == 'true'">true</RedBoltProjectBuildEnabled>
+    <RedBoltProjectBuildEnabled Condition="'$(RedBoltIgnoreBuildSelection)' == 'true'">true</RedBoltProjectBuildEnabled>
+    <BuildDependsOn Condition="'$(MSBuildProjectName)' == 'RedBolt.PhysicsJolt.Build'">RedBoltBuildSelectedProjects</BuildDependsOn>
+    <RebuildDependsOn Condition="'$(MSBuildProjectName)' == 'RedBolt.PhysicsJolt.Build'">RedBoltBuildSelectedProjects</RebuildDependsOn>
+    <CleanDependsOn Condition="'$(MSBuildProjectName)' == 'RedBolt.PhysicsJolt.Build'">RedBoltCleanSelectedProjects</CleanDependsOn>
+  </PropertyGroup>
+</Project>

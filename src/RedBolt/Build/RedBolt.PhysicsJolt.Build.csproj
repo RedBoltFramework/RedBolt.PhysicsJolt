@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <RedBoltTestsProject>$([System.IO.Path]::GetFullPath('$(RedBoltPhysicsJoltRoot)/../RedBolt.Tests/RedBolt.Tests.csproj'))</RedBoltTestsProject>
+    <_RedBoltLinuxProperties>Configuration=$(Configuration);RedBoltPlatform=linux-x64;RedBoltNativePreset=linux-x64</_RedBoltLinuxProperties>
+    <_RedBoltWindowsProperties>Configuration=$(Configuration);RedBoltPlatform=win-x64;RedBoltNativePreset=win-x64</_RedBoltWindowsProperties>
+    <_RedBoltAndroidX64Properties>Configuration=$(Configuration);RedBoltPlatform=android-x64;RedBoltNativePreset=android-x64;RedBoltTargetFramework=net10.0-android;RedBoltBuildAllAndroidPackages=false</_RedBoltAndroidX64Properties>
+    <_RedBoltAndroidArm64Properties>Configuration=$(Configuration);RedBoltPlatform=android-arm64;RedBoltNativePreset=android-arm64;RedBoltTargetFramework=net10.0-android;RedBoltBuildAllAndroidPackages=false</_RedBoltAndroidArm64Properties>
+    <_RedBoltWebProperties>Configuration=$(Configuration);RedBoltPlatform=browser-wasm;RedBoltNativePreset=browser-wasm</_RedBoltWebProperties>
+  </PropertyGroup>
+  <ItemGroup>
+    <_RedBoltPhysicsJoltDesktopProject Include="../Native/RedBolt.PhysicsJolt.Native.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltDesktopProject Include="../Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltDesktopProject Include="../PhysicsJolt/RedBolt.PhysicsJolt.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltDesktopProject Include="../PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltDesktopProject Include="../Sample/*/*.csproj" Exclude="../Sample/Android/*.csproj;../Sample/Web/*.csproj" Condition="'$(RedBoltSamplesEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltDesktopProject Include="$(RedBoltTestsProject)" Condition="'$(RedBoltTestsEnabled)' == 'true' and Exists('$(RedBoltTestsProject)')" />
+    <_RedBoltPhysicsJoltAndroidProject Include="../Native/RedBolt.PhysicsJolt.Native.Android.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltAndroidProject Include="../Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltAndroidProject Include="../PhysicsJolt/RedBolt.PhysicsJolt.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltAndroidProject Include="../PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltAndroidProject Include="../Sample/Android/RedBolt.Sample.Android.csproj" Condition="'$(RedBoltSamplesEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltWebProject Include="../Native/RedBolt.PhysicsJolt.Native.Web.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltWebProject Include="../Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltWebProject Include="../PhysicsJolt/RedBolt.PhysicsJolt.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltWebProject Include="../PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj" Condition="'$(RedBoltPhysicsJoltEnabled)' == 'true'" />
+    <_RedBoltPhysicsJoltWebProject Include="../Sample/Web/RedBolt.Sample.Web.csproj" Condition="'$(RedBoltSamplesEnabled)' == 'true'" />
+  </ItemGroup>
+  <Target Name="RedBoltPhysicsJoltValidateBuildConfiguration">
+    <Error Condition="'$(RedBoltTestsEnabled)' == 'true' and !Exists('$(RedBoltTestsProject)' )" Text="The tests module is enabled, but '$(RedBoltTestsProject)' does not exist." />
+  </Target>
+  <Target Name="RedBoltRestoreSelectedProjects" DependsOnTargets="RedBoltPhysicsJoltValidateBuildConfiguration">
+    <MSBuild Projects="@(_RedBoltPhysicsJoltDesktopProject)" Targets="Restore" BuildInParallel="false" Properties="$(_RedBoltLinuxProperties)" Condition="'$(RedBoltLinuxEnabled)' == 'true' and '$(RedBoltX64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltDesktopProject)" Targets="Restore" BuildInParallel="false" Properties="$(_RedBoltWindowsProperties)" Condition="'$(RedBoltWindowsEnabled)' == 'true' and '$(RedBoltX64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltAndroidProject)" Targets="Restore" BuildInParallel="false" Properties="$(_RedBoltAndroidX64Properties)" Condition="'$(RedBoltAndroidEnabled)' == 'true' and '$(RedBoltX64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltAndroidProject)" Targets="Restore" BuildInParallel="false" Properties="$(_RedBoltAndroidArm64Properties)" Condition="'$(RedBoltAndroidEnabled)' == 'true' and '$(RedBoltArm64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltWebProject)" Targets="Restore" BuildInParallel="false" Properties="$(_RedBoltWebProperties)" Condition="'$(RedBoltWebEnabled)' == 'true'" />
+  </Target>
+  <Target Name="RedBoltBuildSelectedProjects" DependsOnTargets="RedBoltPhysicsJoltValidateBuildConfiguration">
+    <MSBuild Projects="@(_RedBoltPhysicsJoltDesktopProject)" Targets="Build" BuildInParallel="false" RemoveProperties="BuildingSolutionFile;CurrentSolutionConfigurationContents" Properties="$(_RedBoltLinuxProperties)" Condition="'$(RedBoltLinuxEnabled)' == 'true' and '$(RedBoltX64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltDesktopProject)" Targets="Build" BuildInParallel="false" RemoveProperties="BuildingSolutionFile;CurrentSolutionConfigurationContents" Properties="$(_RedBoltWindowsProperties)" Condition="'$(RedBoltWindowsEnabled)' == 'true' and '$(RedBoltX64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltAndroidProject)" Targets="Build" BuildInParallel="false" RemoveProperties="BuildingSolutionFile;CurrentSolutionConfigurationContents" Properties="$(_RedBoltAndroidX64Properties)" Condition="'$(RedBoltAndroidEnabled)' == 'true' and '$(RedBoltX64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltAndroidProject)" Targets="Build" BuildInParallel="false" RemoveProperties="BuildingSolutionFile;CurrentSolutionConfigurationContents" Properties="$(_RedBoltAndroidArm64Properties)" Condition="'$(RedBoltAndroidEnabled)' == 'true' and '$(RedBoltArm64Enabled)' == 'true'" />
+    <MSBuild Projects="@(_RedBoltPhysicsJoltWebProject)" Targets="Build" BuildInParallel="false" RemoveProperties="BuildingSolutionFile;CurrentSolutionConfigurationContents" Properties="$(_RedBoltWebProperties)" Condition="'$(RedBoltWebEnabled)' == 'true'" />
+  </Target>
+  <Target Name="RedBoltCleanSelectedProjects">
+    <MSBuild Projects="@(_RedBoltPhysicsJoltDesktopProject);@(_RedBoltPhysicsJoltAndroidProject);@(_RedBoltPhysicsJoltWebProject)" Targets="Clean" BuildInParallel="true" />
+  </Target>
+</Project>
