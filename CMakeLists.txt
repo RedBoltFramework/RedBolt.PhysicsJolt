@@ -118,6 +118,9 @@ target_include_directories(redbolt-physics-jolt-native-jolt PRIVATE
     "${REDBOLT_JOLT_INCLUDE_DIR}"
     "${REDBOLT_JOLT_SUPPORT_INCLUDE_DIR}")
 target_compile_definitions(redbolt-physics-jolt-native-jolt PRIVATE REDBOLT_NATIVE_BUILD JPH_OBJECT_LAYER_BITS=32)
+if(MINGW)
+    target_compile_options(redbolt-physics-jolt-native-jolt PRIVATE "-Wa,-mbig-obj")
+endif()
 set_target_properties(redbolt-physics-jolt-native-jolt PROPERTIES
     OUTPUT_NAME "RedBolt.Native.Jolt"
     RUNTIME_OUTPUT_DIRECTORY "${REDBOLT_RUNTIME_OUTPUT_DIR}"
