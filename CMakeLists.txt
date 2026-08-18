@@ -53,9 +53,7 @@ unset(CPM_VERSION CACHE)
 include("${REDBOLT_ROOT}/cmake/CPM.cmake")
 set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/deps")
 
-set(SHARPCPP_BUILD_E2E OFF CACHE BOOL "Build SharpCpp E2E" FORCE)
-set(SHARPCPP_BUILD_RBFX OFF CACHE BOOL "Build SharpCpp rbfx bindings" FORCE)
-add_subdirectory("${REDBOLT_SHARPCPP_ROOT}" "${CMAKE_BINARY_DIR}/deps/SharpCpp" EXCLUDE_FROM_ALL)
+include("${REDBOLT_ROOT}/cmake/RedBoltSharpCpp.cmake")
 
 set(OBJECT_LAYER_BITS 32 CACHE STRING "Use 16 collision layer and mask bits" FORCE)
 set(JPH_BUILD_SHARED_LIBS OFF CACHE BOOL "Build Jolt statically" FORCE)
@@ -99,7 +97,6 @@ elseif(CMAKE_BUILD_TYPE MATCHES "^(Release|Distribution|ReleaseASAN|ReleaseUBSAN
 endif()
 set(REDBOLT_BINDING_DEFINES ${_redbolt_jolt_binding_defines})
 
-include("${REDBOLT_ROOT}/cmake/RedBoltSharpCpp.cmake")
 add_subdirectory(src/RedBolt/Generator/Dependencies)
 add_subdirectory(src/RedBolt/Native/JoltPhysics)
 

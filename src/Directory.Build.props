@@ -13,7 +13,6 @@ For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENS
     <RedBoltNetworkEnabled>true</RedBoltNetworkEnabled>
     <RedBoltExternalModuleRoot>$(RedBoltPhysicsJoltRoot)</RedBoltExternalModuleRoot>
     <RedBoltExternalModuleName>RedBolt.PhysicsJolt</RedBoltExternalModuleName>
-    <RedBoltExternalBuildProjectName>RedBolt.PhysicsJolt.Build</RedBoltExternalBuildProjectName>
     <RedBoltExternalGeneratorProjectName>RedBolt.PhysicsJolt.Generator.Dependencies</RedBoltExternalGeneratorProjectName>
     <RedBoltExternalGeneratorProjectPrefix>RedBolt.PhysicsJolt.Generator.</RedBoltExternalGeneratorProjectPrefix>
     <RedBoltExternalNativeWebProjectName>RedBolt.PhysicsJolt.Native.Web</RedBoltExternalNativeWebProjectName>
@@ -31,6 +30,5 @@ For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENS
   <Import Project="$(RedBoltRoot)/src/RedBolt/Build/Directory.Build.props" />
   <PropertyGroup>
     <RedBoltExternalModuleEnabled>$(RedBoltPhysicsJoltEnabled)</RedBoltExternalModuleEnabled>
-    <RedBoltExternalModuleBuildProperties>RedBoltPhysicsJoltEnabled=$(RedBoltPhysicsJoltEnabled)</RedBoltExternalModuleBuildProperties>
   </PropertyGroup>
 </Project>

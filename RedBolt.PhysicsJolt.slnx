@@ -5,30 +5,27 @@ For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENS
 -->
 
 <Solution>
-  <Folder Name="/src/RedBolt/Build/">
-    <Project Path="src/RedBolt/Build/RedBolt.PhysicsJolt.Build.csproj" />
-  </Folder>
   <Folder Name="/src/RedBolt/">
-    <Project Path="src/RedBolt/PhysicsJolt/RedBolt.PhysicsJolt.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj"><Build Project="false" /></Project>
+    <Project Path="src/RedBolt/PhysicsJolt/RedBolt.PhysicsJolt.csproj" />
+    <Project Path="src/RedBolt/PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj" />
   </Folder>
   <Folder Name="/src/RedBolt/Generator/">
-    <Project Path="src/RedBolt/Generator/Dependencies/RedBolt.PhysicsJolt.Generator.Dependencies.csproj"><Build Project="false" /></Project>
+    <Project Path="src/RedBolt/Generator/Dependencies/RedBolt.PhysicsJolt.Generator.Dependencies.csproj" />
   </Folder>
   <Folder Name="/src/RedBolt/Native/">
-    <Project Path="src/RedBolt/Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Web.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Android.csproj"><Build Project="false" /></Project>
+    <Project Path="src/RedBolt/Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj" />
+    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.csproj" />
+    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Web.csproj" />
+    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Android.csproj" />
   </Folder>
   <Folder Name="/src/RedBolt/Sample/">
-    <Project Path="src/RedBolt/Sample/AdvancedNetworking/RedBolt.Sample.AdvancedNetworking.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Sample/CharacterDemo/RedBolt.Sample.CharacterDemo.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Sample/KinematicCharacter/RedBolt.Sample.KinematicCharacter.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Sample/Physics/RedBolt.Sample.Physics.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Sample/RaycastVehicle/RedBolt.Sample.RaycastVehicle.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Sample/SceneReplication/RedBolt.Sample.SceneReplication.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Sample/Web/RedBolt.Sample.Web.csproj"><Build Project="false" /></Project>
-    <Project Path="src/RedBolt/Sample/Android/RedBolt.Sample.Android.csproj"><Build Project="false" /></Project>
+    <Project Path="src/RedBolt/Sample/AdvancedNetworking/RedBolt.Sample.AdvancedNetworking.csproj" />
+    <Project Path="src/RedBolt/Sample/CharacterDemo/RedBolt.Sample.CharacterDemo.csproj" />
+    <Project Path="src/RedBolt/Sample/KinematicCharacter/RedBolt.Sample.KinematicCharacter.csproj" />
+    <Project Path="src/RedBolt/Sample/Physics/RedBolt.Sample.Physics.csproj" />
+    <Project Path="src/RedBolt/Sample/RaycastVehicle/RedBolt.Sample.RaycastVehicle.csproj" />
+    <Project Path="src/RedBolt/Sample/SceneReplication/RedBolt.Sample.SceneReplication.csproj" />
+    <Project Path="src/RedBolt/Sample/Web/RedBolt.Sample.Web.csproj" />
+    <Project Path="src/RedBolt/Sample/Android/RedBolt.Sample.Android.csproj" />
   </Folder>
 </Solution>
