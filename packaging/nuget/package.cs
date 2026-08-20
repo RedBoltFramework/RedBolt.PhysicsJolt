@@ -2,7 +2,7 @@
 // This work is licensed under the terms of the MIT license.
 // For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENSE file.
 
-#:project ../../../RedBolt/src/RedBolt/Build/Packaging/RedBolt.ExternalModule.Packaging.csproj
+#:project ../../../RedBolt/eng/RedBolt.ModuleBuild/Packaging/RedBolt.ExternalModule.Packaging.csproj
 
 using System.Runtime.CompilerServices;
 using RedBolt.ExternalModule.Packaging;
@@ -16,12 +16,11 @@ return ExternalModulePackager.Run(args, new ExternalModulePackageManifest
     DefaultRids = ["linux-x64"],
     BuildSteps =
     [
-        new("Native/RedBolt.PhysicsJolt.Native.csproj", BuildWhen.Linux),
         new("Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj", BuildWhen.Linux, true),
         new("PhysicsJolt/RedBolt.PhysicsJolt.csproj", BuildWhen.Linux, true, "-p:BuildProjectReferences=false"),
         new("PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj", BuildWhen.Linux, true, "-p:BuildProjectReferences=false"),
         new("PhysicsJolt/RedBolt.PhysicsJolt.csproj", BuildWhen.Windows, false,
-            "-p:RedBoltPlatform=win-x64", "-p:RedBoltNativePreset=win-x64"),
+            "-p:RedBoltPlatform=win-x64"),
         new("Sample/Web/RedBolt.Sample.Web.csproj", BuildWhen.Web, false, "-p:RedBoltEnablePlatforms=web"),
         new("Sample/Android/RedBolt.Sample.Android.csproj", BuildWhen.Android, false,
             "--framework", "net10.0-android", "-p:RedBoltEnablePlatforms=android", "-p:RedBoltEnableArchitectures=all")

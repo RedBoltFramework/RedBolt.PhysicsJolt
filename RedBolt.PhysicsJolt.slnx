@@ -14,9 +14,6 @@ For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENS
   </Folder>
   <Folder Name="/src/RedBolt/Native/">
     <Project Path="src/RedBolt/Native/JoltPhysics/RedBolt.Bindings.Jolt.csproj" />
-    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.csproj" />
-    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Web.csproj" />
-    <Project Path="src/RedBolt/Native/RedBolt.PhysicsJolt.Native.Android.csproj" />
   </Folder>
   <Folder Name="/src/RedBolt/Sample/">
     <Project Path="src/RedBolt/Sample/AdvancedNetworking/RedBolt.Sample.AdvancedNetworking.csproj" />
