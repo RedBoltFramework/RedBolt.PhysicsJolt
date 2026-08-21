@@ -1,0 +1,30 @@
+{
+  "name": "RedBolt.PhysicsJolt",
+  "applicationId": "org.redbolt.physicsjolt.samples",
+  "web": true,
+  "android": true,
+  "native": true,
+  "webNative": true,
+  "nativeDependencies": [
+    "RedBolt.Network"
+  ],
+  "projectReferences": [
+    "src/RedBolt/PhysicsJolt/RedBolt.PhysicsJolt.csproj",
+    "src/RedBolt/PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj",
+    "../RedBolt/src/RedBolt/DearImGui/RedBolt.DearImGui.csproj",
+    "../RedBolt.Network/src/RedBolt/Network/RedBolt.Network.csproj"
+  ],
+  "webPInvokeModules": [
+    "RedBolt.Native.DearImGui",
+    "RedBolt.Native.Jolt"
+  ],
+  "webExtension": "../RedBolt.Network/src/RedBolt/Sample/Web/wwwroot/extension.js",
+  "samples": [
+    { "id": "advanced-networking", "name": "Advanced Networking", "applicationType": "RedBolt.Sample.AdvancedNetworking.AdvancedNetworking", "source": "AdvancedNetworking" },
+    { "id": "character-demo", "name": "Character Demo", "applicationType": "RedBolt.Sample.CharacterDemo.CharacterDemo", "source": "CharacterDemo" },
+    { "id": "kinematic-character", "name": "Kinematic Character", "applicationType": "RedBolt.Sample.KinematicCharacter.KinematicCharacterDemo", "source": "KinematicCharacter" },
+    { "id": "physics", "name": "Physics", "applicationType": "RedBolt.Sample.Physics.PhysicsSample", "source": "Physics" },
+    { "id": "raycast-vehicle", "name": "Raycast Vehicle", "applicationType": "RedBolt.Sample.RaycastVehicle.RaycastVehicleDemo", "source": "RaycastVehicle" },
+    { "id": "scene-replication", "name": "Scene Replication", "applicationType": "RedBolt.Sample.SceneReplication.SceneReplication", "source": "SceneReplication" }
+  ]
+}
