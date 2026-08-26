@@ -108,13 +108,16 @@ public sealed partial class Vehicle2 : MoveAndOrbitComponent
 
         var boxExtents = new Vector3f(2.3f, 1.0f, 4.0f);
         node.CreateComponent<CollisionShape>().SetBox(boxExtents);
-        var box = node.CreateChild();
-        box.SetScale(boxExtents);
-        var hullObject = box.CreateComponent<StaticModel>();
-        hullObject.SetModel(GetSubsystem<ResourceCache>()!.Get<Model>("Models/Box.mdl"));
-        hullObject.SetMaterial(GetSubsystem<ResourceCache>()!.Get<Material>("Materials/Stone.xml"));
+        var modelNode = node.CreateChild();
+        modelNode.SetPosition(new Vector3f(0.0f, -1.0f, 0.0f));
+        modelNode.SetRotation(new Quaternion(0.0f, 180.0f, 0.0f));
+        modelNode.SetScale(5.0f);
+        var hullObject = modelNode.CreateComponent<StaticModel>();
+        hullObject.SetModel(GetSubsystem<ResourceCache>()!.Get<Model>(
+            "ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Models/vehicle-racer.mdl"));
+        hullObject.SetMaterial(GetSubsystem<ResourceCache>()!.Get<Material>(
+            "ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Materials/colormap_Lit.xml"));
         hullObject.SetCastShadows(true);
-
         const float connectionHeight = -0.4f;
         var wheelDirection = new Vector3f(0.0f, -1.0f, 0.0f);
         var wheelAxle = new Vector3f(-1.0f, 0.0f, 0.0f);
@@ -124,8 +127,10 @@ public sealed partial class Vehicle2 : MoveAndOrbitComponent
         _connectionPoints[2] = new Vector3f(-wheelX, connectionHeight, -2.5f + _wheelRadius * 2.0f);
         _connectionPoints[3] = new Vector3f(wheelX, connectionHeight, -2.5f + _wheelRadius * 2.0f);
 
-        foreach (var connectionPoint in _connectionPoints)
+        string[] wheelModels = ["wheel-fl.mdl", "wheel-fr.mdl", "wheel-bl.mdl", "wheel-br.mdl"];
+        for (var wheelIndex = 0; wheelIndex < _connectionPoints.Length; ++wheelIndex)
         {
+            var connectionPoint = _connectionPoints[wheelIndex];
             var wheelNode = node.CreateChild();
             var isFrontWheel = connectionPoint.Z > 0.0f;
             var rotation = connectionPoint.X >= 0.0f
@@ -149,10 +154,16 @@ public sealed partial class Vehicle2 : MoveAndOrbitComponent
             wheel.FrictionSlip = _wheelFriction;
             wheel.RollInfluence = _rollInfluence;
 
-            wheelNode.SetScale(new Vector3f(1.0f, 0.65f, 1.0f));
-            var wheelObject = wheelNode.CreateComponent<StaticModel>();
-            wheelObject.SetModel(GetSubsystem<ResourceCache>()!.Get<Model>("Models/Cylinder.mdl"));
-            wheelObject.SetMaterial(GetSubsystem<ResourceCache>()!.Get<Material>("Materials/Stone.xml"));
+            var wheelVisual = wheelNode.CreateChild();
+            wheelVisual.SetRotation(connectionPoint.X >= 0.0f
+                ? new Quaternion(0.0f, 0.0f, 90.0f)
+                : new Quaternion(0.0f, 0.0f, -90.0f));
+            wheelVisual.SetScale(new Vector3f(3.2f, 4.0f, 4.0f));
+            var wheelObject = wheelVisual.CreateComponent<StaticModel>();
+            wheelObject.SetModel(GetSubsystem<ResourceCache>()!.Get<Model>(
+                $"ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Models/{wheelModels[wheelIndex]}"));
+            wheelObject.SetMaterial(GetSubsystem<ResourceCache>()!.Get<Material>(
+                "ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Materials/colormap_Lit.xml"));
             wheelObject.SetCastShadows(true);
             CreateEmitter(connectionPoint);
         }

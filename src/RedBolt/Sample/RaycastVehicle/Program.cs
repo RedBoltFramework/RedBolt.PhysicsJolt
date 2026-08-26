@@ -37,7 +37,7 @@ internal static class RaycastVehicleProgram
 /// <summary>Raycast vehicle sample ported from rbfx sample 46.</summary>
 public sealed class RaycastVehicleDemo : Application
 {
-    private const float CameraDistance = 10.0f;
+    private const float CameraDistance = 14.0f;
     private const uint StaticCollisionLayer = 2;
     private const int NumMushrooms = 1000;
 
@@ -90,9 +90,9 @@ public sealed class RaycastVehicleDemo : Application
         Renderer.SetViewport(0, _viewport);
 
         var zone = _scene.CreateChild("Zone").CreateComponent<Zone>();
-        zone.SetAmbientColor(new Color(0.15f, 0.15f, 0.15f));
-        zone.SetFogColor(new Color(0.5f, 0.5f, 0.7f));
-        zone.SetFogStart(300.0f);
+        zone.SetAmbientColor(new Color(0.28f, 0.30f, 0.26f));
+        zone.SetFogColor(new Color(0.62f, 0.72f, 0.82f));
+        zone.SetFogStart(250.0f);
         zone.SetFogEnd(500.0f);
         zone.SetBoundingBox(new BoundingBox(-2000.0f, 2000.0f));
 
@@ -100,6 +100,7 @@ public sealed class RaycastVehicleDemo : Application
         lightNode.SetDirection(new Vector3f(0.3f, -0.5f, 0.425f));
         var light = lightNode.CreateComponent<Light>();
         light.SetLightType(LightType.Directional);
+        light.SetColor(new Color(1.0f, 0.84f, 0.68f));
         light.SetCastShadows(true);
         light.SetShadowBias(new BiasParameters(0.00025f, 0.5f));
         light.SetShadowCascade(new CascadeParameters(10.0f, 50.0f, 200.0f, 0.0f, 0.8f));
@@ -122,16 +123,73 @@ public sealed class RaycastVehicleDemo : Application
         var mushroomPrefab = Resources.Get<PrefabResource>("Prefabs/Mushroom.prefab");
         for (var i = 0; i < NumMushrooms; ++i)
         {
-            var mushroomNode = _scene.CreateChild("Mushroom");
             var position = new Vector3f(
                 MathDefs.Random(2000.0f) - 1000.0f,
                 0.0f,
                 MathDefs.Random(2000.0f) - 1000.0f);
+            if (MathF.Abs(position.X) < 10.0f && position.Z > -5.0f && position.Z < 30.0f)
+                continue;
+            var mushroomNode = _scene.CreateChild("Mushroom");
             position.Y = terrain.GetHeight(position) - 0.1f;
             mushroomNode.SetPosition(position);
             mushroomNode.SetRotation(new Quaternion(Vector3f.Up, terrain.GetNormal(position)));
             mushroomNode.SetScale(3.0f);
             mushroomNode.CreateComponent<PrefabReference>().SetPrefab(mushroomPrefab);
+        }
+
+        var trackMaterial = Resources.Get<Material>(
+            "ThirdParty/KenneyToyCar/track-striped-wide-straight.glb.d/Materials/colormap_Lit.xml");
+        var trackNode = _scene.CreateChild("Track");
+        trackNode.SetPosition(new Vector3f(0.0f, terrain.GetHeight(new Vector3f(0.0f, 0.0f, 10.0f)) + 0.1f, 0.0f));
+        trackNode.SetScale(5.0f);
+        var trackModel = trackNode.CreateComponent<StaticModel>();
+        trackModel.SetModel(Resources.Get<Model>(
+            "ThirdParty/KenneyToyCar/track-striped-wide-straight.glb.d/Models/track-striped-wide-straight.mdl"));
+        trackModel.SetMaterial(trackMaterial);
+        trackModel.SetCastShadows(true);
+
+        var gateNode = _scene.CreateChild("FinishGate");
+        gateNode.SetPosition(new Vector3f(0.0f, terrain.GetHeight(new Vector3f(0.0f, 0.0f, 20.0f)), 20.0f));
+        gateNode.SetScale(5.0f);
+        var gateModel = gateNode.CreateComponent<StaticModel>();
+        gateModel.SetModel(Resources.Get<Model>(
+            "ThirdParty/KenneyToyCar/gate-finish.glb.d/Models/gate-finish.mdl"));
+        gateModel.SetMaterial(Resources.Get<Material>(
+            "ThirdParty/KenneyToyCar/gate-finish.glb.d/Materials/colormap_Lit.xml"));
+        gateModel.SetCastShadows(true);
+
+        for (var i = 0; i < 8; ++i)
+        {
+            foreach (var side in new[] { -1.0f, 1.0f })
+            {
+                var position = new Vector3f(side * 6.0f, 0.0f, i * 4.0f);
+                position.Y = terrain.GetHeight(position) + 0.5f;
+                var coneNode = _scene.CreateChild("RouteCone");
+                coneNode.SetPosition(position);
+                coneNode.SetScale(new Vector3f(0.7f, 1.0f, 0.7f));
+                var cone = coneNode.CreateComponent<StaticModel>();
+                cone.SetModel(Resources.Get<Model>("Models/Cone.mdl"));
+                cone.SetMaterial(Resources.Get<Material>("Materials/Constant/MattRed.xml"));
+                cone.SetCastShadows(true);
+            }
+        }
+
+        var treeModel = Resources.Get<Model>(
+            "ThirdParty/KenneyNature/tree_default.glb.d/Models/Mesh tree_default.mdl");
+        for (var i = 0; i < 10; ++i)
+        {
+            var treeNode = _scene.CreateChild("RouteTree");
+            var position = new Vector3f(i % 2 == 0 ? -13.0f : 13.0f, 0.0f, i * 5.0f);
+            position.Y = terrain.GetHeight(position);
+            treeNode.SetPosition(position);
+            treeNode.SetScale(3.0f);
+            var tree = treeNode.CreateComponent<StaticModel>();
+            tree.SetModel(treeModel);
+            tree.SetMaterial(0, Resources.Get<Material>(
+                "ThirdParty/KenneyNature/tree_default.glb.d/Materials/woodBark_Lit.xml"));
+            tree.SetMaterial(1, Resources.Get<Material>(
+                "ThirdParty/KenneyNature/tree_default.glb.d/Materials/leafsGreen_Lit.xml"));
+            tree.SetCastShadows(true);
         }
     }
 
@@ -180,7 +238,7 @@ public sealed class RaycastVehicleDemo : Application
         var direction = new Quaternion(vehicleNode.Rotation.YawAngle, Vector3f.Up);
         direction *= new Quaternion(_vehicle.GetYaw(), Vector3f.Up);
         direction *= new Quaternion(_vehicle.GetPitch(), Vector3f.Right);
-        var cameraStartPosition = vehicleNode.Position;
+        var cameraStartPosition = vehicleNode.Position + Vector3f.Up * 2.5f;
         var cameraTargetPosition = cameraStartPosition - direction * new Vector3f(0.0f, 0.0f, CameraDistance);
 
         var cameraRay = new Ray(cameraStartPosition, cameraTargetPosition - cameraStartPosition);
