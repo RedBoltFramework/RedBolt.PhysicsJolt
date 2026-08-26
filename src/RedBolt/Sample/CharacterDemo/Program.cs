@@ -247,6 +247,15 @@ public class CharacterDemo : Application
     private void CreateInstructions()
     {
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
+        _controlPrompts =
+        [
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_w.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_a.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_s.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_d.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_right.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_space.png")
+        ];
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>(
             (ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
 
@@ -337,15 +346,26 @@ public class CharacterDemo : Application
         }
     }
 
-    private static void DrawInstructions()
+    private void DrawInstructions()
     {
         var windowOpen = true;
         if (ImGui.Begin("Character Demo"u8, ref windowOpen,
                 ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
                 ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
+            for (var i = 0; i < 4; ++i)
+            {
+                ImGui.Image(_controlPrompts[i]!, new Vector2f(24.0f, 24.0f));
+                ImGui.SameLine();
+            }
+            ImGui.TextUnformatted("Move"u8);
+            ImGui.Image(_controlPrompts[4]!, new Vector2f(24.0f, 24.0f));
+            ImGui.SameLine();
+            ImGui.TextUnformatted("Hold to rotate camera"u8);
+            ImGui.Image(_controlPrompts[5]!, new Vector2f(24.0f, 24.0f));
+            ImGui.SameLine();
             ImGui.TextUnformatted(
-                "Use WASD keys and hold right mouse button/touch to move\nSpace to jump, F to toggle 1st/3rd person\nEscape to exit"u8);
+                "Jump   F: toggle 1st/3rd person   Escape: exit"u8);
         }
         ImGui.End();
     }
@@ -400,4 +420,5 @@ public class CharacterDemo : Application
     /// <summary>First person camera flag.</summary>
     private bool _firstPerson;
     private DirectionalPadAdapter? _dPadAdapter;
+    private Texture2D?[] _controlPrompts = [];
 }
