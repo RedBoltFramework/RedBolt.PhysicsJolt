@@ -39,7 +39,7 @@ public sealed class RaycastVehicleDemo : Application
 {
     private const float CameraDistance = 14.0f;
     private const uint StaticCollisionLayer = 2;
-    private const int NumMushrooms = 1000;
+    private const int NumSceneryRocks = 1000;
 
     private Scene? _scene;
     private Node? _cameraNode;
@@ -113,15 +113,17 @@ public sealed class RaycastVehicleDemo : Application
         terrain.SetSpacing(new Vector3f(3.0f, 0.1f, 3.0f));
         terrain.SetSmoothing(true);
         terrain.SetHeightMap(Resources.Get<Image>("Textures/HeightMap.png"));
-        terrain.SetMaterial(Resources.Get<Material>("Materials/Terrain.xml"));
+        terrain.SetMaterial(Resources.Get<Material>("ThirdParty/KenneyNature/grass.glb.d/Materials/grass_Lit.xml"));
         terrain.SetOccluder(true);
 
         var terrainBody = terrainNode.CreateComponent<RigidBody>();
         terrainBody.CollisionLayer = StaticCollisionLayer;
         terrainNode.CreateComponent<CollisionShape>().SetTerrain();
 
-        var mushroomPrefab = Resources.Get<PrefabResource>("Prefabs/Mushroom.prefab");
-        for (var i = 0; i < NumMushrooms; ++i)
+        var rockModel = Resources.Get<Model>("ThirdParty/KenneyNature/rock_smallA.glb.d/Models/Mesh rock_smallA.mdl");
+        var rockGrassMaterial = Resources.Get<Material>("ThirdParty/KenneyNature/rock_smallA.glb.d/Materials/grass_Lit.xml");
+        var dirtMaterial = Resources.Get<Material>("ThirdParty/KenneyNature/rock_smallA.glb.d/Materials/dirt_Lit.xml");
+        for (var i = 0; i < NumSceneryRocks; ++i)
         {
             var position = new Vector3f(
                 MathDefs.Random(2000.0f) - 1000.0f,
@@ -129,12 +131,15 @@ public sealed class RaycastVehicleDemo : Application
                 MathDefs.Random(2000.0f) - 1000.0f);
             if (MathF.Abs(position.X) < 10.0f && position.Z > -5.0f && position.Z < 30.0f)
                 continue;
-            var mushroomNode = _scene.CreateChild("Mushroom");
+            var rockNode = _scene.CreateChild("SceneryRock");
             position.Y = terrain.GetHeight(position) - 0.1f;
-            mushroomNode.SetPosition(position);
-            mushroomNode.SetRotation(new Quaternion(Vector3f.Up, terrain.GetNormal(position)));
-            mushroomNode.SetScale(3.0f);
-            mushroomNode.CreateComponent<PrefabReference>().SetPrefab(mushroomPrefab);
+            rockNode.SetPosition(position);
+            rockNode.SetRotation(new Quaternion(Vector3f.Up, terrain.GetNormal(position)));
+            rockNode.SetScale(1.5f + MathDefs.Random(1.5f));
+            var rock = rockNode.CreateComponent<StaticModel>();
+            rock.SetModel(rockModel);
+            rock.SetMaterial(0, rockGrassMaterial);
+            rock.SetMaterial(1, dirtMaterial);
         }
 
         var trackMaterial = Resources.Get<Material>(
@@ -157,22 +162,6 @@ public sealed class RaycastVehicleDemo : Application
         gateModel.SetMaterial(Resources.Get<Material>(
             "ThirdParty/KenneyToyCar/gate-finish.glb.d/Materials/colormap_Lit.xml"));
         gateModel.SetCastShadows(true);
-
-        for (var i = 0; i < 8; ++i)
-        {
-            foreach (var side in new[] { -1.0f, 1.0f })
-            {
-                var position = new Vector3f(side * 6.0f, 0.0f, i * 4.0f);
-                position.Y = terrain.GetHeight(position) + 0.5f;
-                var coneNode = _scene.CreateChild("RouteCone");
-                coneNode.SetPosition(position);
-                coneNode.SetScale(new Vector3f(0.7f, 1.0f, 0.7f));
-                var cone = coneNode.CreateComponent<StaticModel>();
-                cone.SetModel(Resources.Get<Model>("Models/Cone.mdl"));
-                cone.SetMaterial(Resources.Get<Material>("Materials/Constant/MattRed.xml"));
-                cone.SetCastShadows(true);
-            }
-        }
 
         var treeModel = Resources.Get<Model>(
             "ThirdParty/KenneyNature/tree_default.glb.d/Models/Mesh tree_default.mdl");
