@@ -199,13 +199,15 @@ public class KinematicCharacterDemo : Application
 
         // Create the rendering component + animation controller
         var model = adjustNode.CreateComponent<AnimatedModel>();
-        model.SetModel(cache.Get<Model>("Models/Mutant/Mutant.mdl"));
-        model.SetMaterial(cache.Get<Material>("Models/Mutant/Materials/mutant_M.xml"));
+        model.SetModel(cache.Get<Model>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Models/Sphere.005_Retopology.004.mdl"));
+        model.SetMaterial(0, cache.Get<Material>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Materials/MI_Superhero_Male_LitNormalMap.xml"));
+        model.SetMaterial(1, cache.Get<Material>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Materials/MI_Hair_1_LitNormalMap.xml"));
+        model.SetMaterial(2, cache.Get<Material>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Materials/MI_Eyes_LitNormalMap.xml"));
         model.SetCastShadows(true);
         adjustNode.CreateComponent<AnimationController>();
 
         // Set the head bone for manual control
-        model.GetSkeleton().GetBone("Mutant:Head")!.Animated = false;
+        model.GetSkeleton().GetBone("Head")!.Animated = false;
 
         // Create the character logic component, which takes care of steering the fake rigidbody
         // Remember it so that we can set the controls. Use a ea::weak_ptr because the scene hierarchy already owns it
@@ -301,7 +303,7 @@ public class KinematicCharacterDemo : Application
         var dir = rot * new Quaternion(character.GetPitch(), Vector3f.Right);
 
         // Turn head to camera pitch, but limit to avoid unnatural animation
-        var headNode = characterNode.GetChild("Mutant:Head", true)!;
+        var headNode = characterNode.GetChild("Head", true)!;
         var limitPitch = MathDefs.Clamp(character.GetPitch(), -45.0f, 45.0f);
         var headDir = rot * new Quaternion(limitPitch, new Vector3f(1.0f, 0.0f, 0.0f));
         // This could be expanded to look at an arbitrary target, now just look at a point in front

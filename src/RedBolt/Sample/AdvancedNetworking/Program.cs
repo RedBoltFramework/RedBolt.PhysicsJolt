@@ -114,9 +114,9 @@ public partial class AdvancedNetworkingPlayer : NetworkBehavior
 
     private enum AnimationKind { Idle, Walk, Jump }
 
-    private const string IdleAnimation = "Models/Mutant/Mutant_Idle0.ani";
-    private const string WalkAnimation = "Models/Mutant/Mutant_Run.ani";
-    private const string JumpAnimation = "Models/Mutant/Mutant_Jump1.ani";
+    private const string IdleAnimation = "ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Idle_Loop.ani";
+    private const string WalkAnimation = "ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani";
+    private const string JumpAnimation = "ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jump_Loop.ani";
     private AnimatedModel? _animatedModel;
     private AnimationController? _animationController;
     private PredictedKinematicController? _networkController;
@@ -566,7 +566,7 @@ public sealed class AdvancedNetworking : Application
                     closestDistance = distance;
                 }
             }
-            if (closest?.GetSkeleton().GetBone("Mutant:RightHandIndex2")?.Node is { } hand)
+            if (closest?.GetSkeleton().GetBone("index_02_r")?.Node is { } hand)
                 return _scene.ToAbsoluteWorldPosition(hand.GetWorldPosition());
         }
 

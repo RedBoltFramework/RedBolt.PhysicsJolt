@@ -102,9 +102,9 @@ public partial class KinematicCharacter : MoveAndOrbitComponent
     public override void FixedUpdate(float timeStep)
     {
         var cache = GetSubsystem<ResourceCache>()!;
-        var runAnimation = cache.Get<Animation>("Models/Mutant/Mutant_Run.ani");
-        var idleAnimation = cache.Get<Animation>("Models/Mutant/Mutant_Idle0.ani");
-        var jumpAnimation = cache.Get<Animation>("Models/Mutant/Mutant_Jump1.ani");
+        var runAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani");
+        var idleAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Idle_Loop.ani");
+        var jumpAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jump_Loop.ani");
 
         // Update the in air timer. Reset if grounded
         if (!_onGround)

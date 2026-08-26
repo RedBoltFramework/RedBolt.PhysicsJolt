@@ -57,9 +57,9 @@ public partial class Character : MoveAndOrbitComponent
     public override void FixedUpdate(float timeStep)
     {
         var cache = GetSubsystem<ResourceCache>()!;
-        var runAnimation = cache.Get<Animation>("Models/Mutant/Mutant_Run.ani");
-        var idleAnimation = cache.Get<Animation>("Models/Mutant/Mutant_Idle0.ani");
-        var jumpAnimation = cache.Get<Animation>("Models/Mutant/Mutant_Jump1.ani");
+        var runAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani");
+        var idleAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Idle_Loop.ani");
+        var jumpAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jump_Loop.ani");
 
         /// \todo Could cache the components for faster access instead of finding them each frame
         var body = GetComponent<RigidBody>()!;
@@ -121,7 +121,8 @@ public partial class Character : MoveAndOrbitComponent
                 animCtrl.PlayExistingExclusive(new AnimationParameters(idleAnimation).Looped(), 0.2f);
 
             // Set walk animation speed proportional to velocity
-            animCtrl.SetSpeed("Models/Mutant/Mutant_Run.ani", planeVelocity.Length * 0.3f);
+            animCtrl.SetSpeed("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani",
+                planeVelocity.Length * 0.3f);
         }
 
         // Reset grounded flag for next frame
