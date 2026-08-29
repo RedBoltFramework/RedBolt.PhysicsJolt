@@ -22,7 +22,9 @@ using RedBolt.Network;
 using RedBolt.PhysicsJolt;
 using RedBolt.Replica;
 using RedBolt.Resource;
+using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
+using Widgets = RedBolt.SystemUI.Widgets;
 
 internal static class AdvancedNetworkingProgram
 {
@@ -60,11 +62,28 @@ public partial class AdvancedNetworkingPlayer : NetworkBehavior
             _animatedModel.ViewMask = UnimportantViewMask;
     }
 
+    public override void WriteSnapshot(NetworkFrame frame, Serializer destination) =>
+        destination.WriteColor(GetPlayerLight()!.Color);
+
     public override void InitializeFromSnapshot(NetworkFrame frame, Deserializer source, bool isOwned)
     {
         InitializeCommon();
+        SetPlayerColor(source.ReadColor());
         if (_animatedModel is not null)
             _animatedModel.ViewMask = isOwned ? UnimportantViewMask : ImportantViewMask;
+    }
+
+    public void SetPlayerColor(Color color)
+    {
+        GetPlayerLight()?.SetColor(color);
+        _animatedModel ??= Node?.GetComponent<AnimatedModel>();
+        if (_animatedModel?.GetMaterial() is not { } sourceMaterial)
+            return;
+
+        _playerMaterial = sourceMaterial.Clone();
+        _playerMaterial.SetShaderParameter("MatDiffColor", color.ToVector4());
+        _animatedModel.SetMaterial(0, _playerMaterial);
+        _animatedModel.SetMaterial(1, _playerMaterial);
     }
 
     public override void Update(float replicaTimeStep, float inputTimeStep)
@@ -87,6 +106,12 @@ public partial class AdvancedNetworkingPlayer : NetworkBehavior
         if (_animationController is null || _networkController is null || _kinematicController is null)
             return;
 
+        if (_interactionTime > 0.0f)
+        {
+            _interactionTime -= timeStep;
+            return;
+        }
+
         var velocity = _networkController.Velocity;
         var walkDirection = new Vector3f(velocity.X, 0.0f, velocity.Z).NormalizedOrDefault();
         if (_currentAnimation != AnimationKind.Jump && velocity.Y > 5.0f)
@@ -98,7 +123,7 @@ public partial class AdvancedNetworkingPlayer : NetworkBehavior
 
         if (walkDirection != Vector3f.Zero)
         {
-            var targetRotation = new Quaternion(Vector3f.Back, walkDirection);
+            var targetRotation = new Quaternion(Vector3f.Forward, walkDirection);
             Node!.SetWorldRotation(Node.GetWorldRotation().Slerp(targetRotation,
                 System.Math.Clamp(timeStep * 8.0f, 0.0f, 1.0f)));
         }
@@ -109,19 +134,42 @@ public partial class AdvancedNetworkingPlayer : NetworkBehavior
             _animationController.PlayExclusive(
                 _currentAnimation == AnimationKind.Walk ? WalkAnimation : IdleAnimation,
                 0, true, 0.1f);
+            if (_currentAnimation == AnimationKind.Walk)
+            {
+                var animation = GetSubsystem<ResourceCache>()!.Get<Animation>(WalkAnimation);
+                var planarSpeed = new Vector2f(velocity.X, velocity.Z).Length;
+                _animationController.SetSpeed(WalkAnimation,
+                    RootMotionAnimation.GetSpeedScale(animation, planarSpeed));
+            }
         }
     }
 
-    private enum AnimationKind { Idle, Walk, Jump }
+    private Light? GetPlayerLight() => Node?.Parent?.FindComponent<Light>();
 
-    private const string IdleAnimation = "ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Idle_Loop.ani";
-    private const string WalkAnimation = "ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani";
-    private const string JumpAnimation = "ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jump_Loop.ani";
+    public void PlayInteraction()
+    {
+        if (_animationController is null)
+            return;
+        var animation = GetSubsystem<ResourceCache>()!.Get<Animation>(InteractionAnimation);
+        _interactionTime = animation.Length;
+        _animationController.PlayExclusive(InteractionAnimation, 0, false, 0.1f);
+        _animationController.SetTime(InteractionAnimation, 0.0f);
+        _currentAnimation = AnimationKind.Interact;
+    }
+
+    private enum AnimationKind { Idle, Walk, Jump, Interact }
+
+    private const string IdleAnimation = "ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Idle_Loop.ani";
+    private const string WalkAnimation = "ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Jog_Fwd_Loop.ani";
+    private const string JumpAnimation = "ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Jump_Loop.ani";
+    private const string InteractionAnimation = "ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Interact.ani";
     private AnimatedModel? _animatedModel;
     private AnimationController? _animationController;
+    private Material? _playerMaterial;
     private PredictedKinematicController? _networkController;
     private KinematicCharacterController? _kinematicController;
     private AnimationKind _currentAnimation;
+    private float _interactionTime;
 }
 
 internal sealed class AdvancedNetworkingConnection : DataChannelConnection
@@ -198,6 +246,7 @@ public sealed class AdvancedNetworking : Application
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context);
         Context.RegisterAssembly(typeof(AdvancedNetworkingPlayer).Assembly);
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
+        _controlPrompts = LoadControlPrompts();
 
         _addressBuffer = Marshal.AllocHGlobal(AddressBufferSize);
         SetAddressBuffer(string.IsNullOrWhiteSpace(_connectOnLaunch) ? "localhost" : _connectOnLaunch);
@@ -261,7 +310,7 @@ public sealed class AdvancedNetworking : Application
         var zone = zoneNode.CreateComponent<Zone>();
         zone.SetBoundingBox(new BoundingBox(-1000.0f, 1000.0f));
         zone.SetAmbientColor(new Color(0.5f, 0.5f, 0.5f));
-        zone.SetFogColor(Color.White);
+        zone.SetFogColor(new Color(0.4f, 0.5f, 0.8f));
         zone.SetFogStart(100.0f);
         zone.SetFogEnd(300.0f);
 
@@ -274,38 +323,40 @@ public sealed class AdvancedNetworking : Application
 
         _hitMarkers = _scene.CreateChild("Hit Markers");
         var boxModel = Resources.Get<Model>("Models/Box.mdl");
-        var stoneMaterial = Resources.Get<Material>("Materials/Stone.xml");
-        for (var y = -20; y <= 20; ++y)
-        {
-            for (var x = -20; x <= 20; ++x)
-            {
-                var floorNode = _scene.CreateChild("FloorTile");
-                floorNode.SetPosition(new Vector3f(x * 20.2f, -0.5f, y * 20.2f));
-                floorNode.SetScale(new Vector3f(20.0f, 1.0f, 20.0f));
-                var model = floorNode.CreateComponent<StaticModel>();
-                model.SetModel(boxModel);
-                model.SetMaterial(stoneMaterial);
-                model.ViewMask = ImportantViewMask;
-                floorNode.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
-                floorNode.CreateComponent<RigidBody>().Friction = 1.0f;
-            }
-        }
+        var floorMaterial = Resources.Get<Material>("Materials/TechnicalDemo/SquareFloorGrid.xml");
+        var obstacleMaterial = Resources.Get<Material>("Materials/TechnicalDemo/Dark.xml");
+        var accentMaterial = Resources.Get<Material>("Materials/TechnicalDemo/Accent.xml");
+        var floorNode = _scene.CreateChild("Floor");
+        floorNode.SetPosition(new Vector3f(0.0f, -0.5f, 0.0f));
+        floorNode.SetScale(new Vector3f(100.0f, 1.0f, 100.0f));
+        var floorModel = floorNode.CreateComponent<StaticModel>();
+        floorModel.SetModel(boxModel);
+        floorModel.SetMaterial(floorMaterial);
+        floorModel.ViewMask = ImportantViewMask;
+        floorNode.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
+        floorNode.CreateComponent<RigidBody>().Friction = 1.0f;
 
         var random = new Random(0);
-        for (var i = 0; i < 200; ++i)
+        for (var i = 0; i < 140; ++i)
         {
-            var scale = RandomRange(random, 1.5f, 4.0f);
+            var scale = new Vector3f(
+                RandomRange(random, 0.75f, 2.5f),
+                RandomRange(random, 0.4f, 1.2f),
+                RandomRange(random, 0.75f, 2.5f));
             var obstacle = _scene.CreateChild("Box");
-            obstacle.SetPosition(new Vector3f(
-                RandomRange(random, -45.0f, 45.0f), scale * 0.5f,
-                RandomRange(random, -45.0f, 45.0f)));
-            obstacle.SetRotation(new Quaternion(Vector3f.Up, new Vector3f(
-                RandomRange(random, -0.4f, 0.4f), 1.0f,
-                RandomRange(random, -0.4f, 0.4f))));
+            float x;
+            float z;
+            do
+            {
+                x = RandomRange(random, -45.0f, 45.0f);
+                z = RandomRange(random, -45.0f, 45.0f);
+            } while (x * x + z * z < 100.0f);
+            obstacle.SetPosition(new Vector3f(x, scale.Y * 0.5f, z));
+            obstacle.SetRotation(new Quaternion(0.0f, RandomRange(random, 0.0f, 360.0f), 0.0f));
             obstacle.SetScale(scale);
             var model = obstacle.CreateComponent<StaticModel>();
             model.SetModel(boxModel);
-            model.SetMaterial(stoneMaterial);
+            model.SetMaterial(i % 12 == 0 ? accentMaterial : obstacleMaterial);
             model.ViewMask = ImportantViewMask;
             model.SetCastShadows(true);
             obstacle.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
@@ -320,16 +371,42 @@ public sealed class AdvancedNetworking : Application
 
     private void DrawInterface()
     {
-        ImGui.SetNextWindowSize(new Vector2f(445.0f, 320.0f), ImGuiCond.ImGuiCondFirstUseEver);
+        var connected = _clientConnection?.IsConnected == true;
+        var listening = _server?.IsListening == true;
+        var hasControls = GetClientObject() is not null;
+        var windowHeight = hasControls ? 585.0f : connected || listening ? 410.0f : 445.0f;
+        ImGui.SetNextWindowPos(new Vector2f(18.0f, 18.0f), ImGuiCond.ImGuiCondAlways);
+        ImGui.SetNextWindowSize(new Vector2f(420.0f, windowHeight), ImGuiCond.ImGuiCondAlways);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowRounding, 12.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowBorderSize, 1.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowPadding, new Vector2f(14.0f, 14.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarFrameRounding, 6.0f);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColWindowBg, HudBackground);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColBorder, PanelBorder);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColCheckMark, AccentText);
         var open = true;
         if (ImGui.Begin("Advanced Networking (Jolt KCC)"u8, ref open,
+            ImGuiWindowFlags.ImGuiWindowFlagsNoDecoration |
+            ImGuiWindowFlags.ImGuiWindowFlagsNoMove |
             ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            var connected = _clientConnection?.IsConnected == true;
-            var listening = _server?.IsListening == true;
+            ImGui.PushStyleColor(ImGuiCol.ImGuiColText, PrimaryText);
+            ImGui.TextUnformatted("NETWORK LAB"u8);
+            ImGui.PopStyleColor();
+            ImGui.PushStyleColor(ImGuiCol.ImGuiColText, MutedText);
+            ImGui.TextUnformatted("Prediction, replication and temporal raycasts"u8);
+            ImGui.PopStyleColor();
+            ImGui.Dummy(new Vector2f(1.0f, 7.0f));
+
+            BeginPanel("##Session"u8, connected || listening ? 76.0f : 112.0f);
+            DrawSectionLabel("SESSION"u8);
             if (!connected && !listening)
             {
-                ImGui.InputText("Server address"u8, _addressBuffer, AddressBufferSize);
+                ImGui.PushStyleColor(ImGuiCol.ImGuiColText, MutedText);
+                ImGui.TextUnformatted("Server address"u8);
+                ImGui.PopStyleColor();
+                ImGui.SetNextItemWidth(-1.0f);
+                ImGui.InputText("##ServerAddress"u8, _addressBuffer, AddressBufferSize);
                 if (ImGui.Button("Connect"u8)) Connect();
 #if !REDBOLT_PLATFORM_BROWSER
                     ImGui.SameLine();
@@ -338,22 +415,99 @@ public sealed class AdvancedNetworking : Application
             }
             else if (ImGui.Button("Stop networking"u8))
                 StopNetworking();
+            EndPanel();
 
-            ImGui.Separator();
+            ImGui.Dummy(new Vector2f(1.0f, 8.0f));
+            BeginPanel("##Simulation"u8, 112.0f);
+            DrawSectionLabel("SIMULATION"u8);
             ImGui.Checkbox("Automatic movement"u8, ref _autoMovement);
             ImGui.Checkbox("Aim at closest hand"u8, ref _autoAim);
             ImGui.Checkbox("Automatic raycasts"u8, ref _autoClick);
+            EndPanel();
+
+            ImGui.Dummy(new Vector2f(1.0f, 8.0f));
+            BeginPanel("##Telemetry"u8, 100.0f);
             var mode = connected ? "Client connected" : listening
                 ? $"Server running, clients: {_serverConnections.Count}" : "Offline";
+            DrawSectionLabel("TELEMETRY"u8);
+            ImGui.PushStyleColor(ImGuiCol.ImGuiColText, connected || listening ? StatusOnline : StatusOffline);
             ImGui.TextUnformatted(Encoding.UTF8.GetBytes(mode));
+            ImGui.PopStyleColor();
             ImGui.TextUnformatted(Encoding.UTF8.GetBytes(
                 $"Packets in/out: {_statistics.PacketsInPerSec} / {_statistics.PacketsOutPerSec}"));
             ImGui.TextUnformatted(Encoding.UTF8.GetBytes(
                 $"Bytes in/out: {_statistics.BytesInPerSec} / {_statistics.BytesOutPerSec}"));
-            if (GetClientObject() is not null)
-                ImGui.TextUnformatted("WASD/Space: move and jump   RMB: orbit   LMB: temporal raycast"u8);
+            EndPanel();
+
+            if (hasControls)
+            {
+                ImGui.Dummy(new Vector2f(1.0f, 8.0f));
+                BeginPanel("##Controls"u8, 157.0f);
+                DrawSectionLabel("CONTROLS"u8);
+                DrawMovementPrompt("Move"u8);
+                DrawPrompt(_controlPrompts![4], "Jump"u8);
+                DrawPrompt(_controlPrompts[5], "Orbit camera"u8);
+                DrawPrompt(_controlPrompts[6], "Temporal raycast"u8);
+                EndPanel();
+            }
         }
         ImGui.End();
+        ImGui.PopStyleColor(3);
+        ImGui.PopStyleVar(4);
+    }
+
+    private static void BeginPanel(ReadOnlySpan<byte> id, float height)
+    {
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColChildBg, PanelBackground);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColBorder, PanelBorder);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarChildRounding, 9.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarChildBorderSize, 1.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowPadding, new Vector2f(12.0f, 10.0f));
+        ImGui.BeginChild(id, new Vector2f(ImGui.GetContentRegionAvail().X, height),
+            ImGuiChildFlags.ImGuiChildFlagsBorders);
+    }
+
+    private static void EndPanel()
+    {
+        ImGui.EndChild();
+        ImGui.PopStyleVar(3);
+        ImGui.PopStyleColor(2);
+    }
+
+    private static void DrawSectionLabel(ReadOnlySpan<byte> label)
+    {
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColText, AccentText);
+        ImGui.TextUnformatted(label);
+        ImGui.PopStyleColor();
+    }
+
+    private Texture2D[] LoadControlPrompts() =>
+    [
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_w.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_a.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_s.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_d.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_space.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_right.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_left.png")
+    ];
+
+    private void DrawMovementPrompt(ReadOnlySpan<byte> label)
+    {
+        for (var i = 0; i < 3; ++i)
+        {
+            ImGui.Image(_controlPrompts![i], PromptIconSize);
+            ImGui.SameLine();
+        }
+        DrawPrompt(_controlPrompts![3], label);
+    }
+
+    private static void DrawPrompt(Texture2D texture, ReadOnlySpan<byte> label)
+    {
+        ImGui.Image(texture, PromptIconSize);
+        ImGui.SameLine();
+        Widgets.AlignTextToLastItem();
+        ImGui.TextUnformatted(label);
     }
 
     private void StartServer()
@@ -445,14 +599,20 @@ public sealed class AdvancedNetworking : Application
     {
         var prefab = Resources.Get<PrefabResource>("Prefabs/AdvancedNetworkingPlayer.prefab")!;
         var playerNode = _scene!.InstantiatePrefab(prefab.GetNodePrefab(), new Vector3f(
-            (float)Random.Shared.NextDouble() * 20.0f - 10.0f, 5.0f,
-            (float)Random.Shared.NextDouble() * 20.0f - 10.0f), Quaternion.IDENTITY)!;
+            (float)Random.Shared.NextDouble() * 10.0f - 5.0f, 5.0f,
+            (float)Random.Shared.NextDouble() * 10.0f - 5.0f), Quaternion.IDENTITY)!;
         var networkObject = playerNode.CreateComponent<BehaviorNetworkObject>();
         networkObject.SetClientPrefab(prefab);
         networkObject.SetOwner(owner);
-        if (playerNode.FindComponent<Light>() is { } light)
-            light.SetColor(Color.Green);
+        playerNode.FindComponent<AdvancedNetworkingPlayer>()?.SetPlayerColor(NextPlayerColor());
         return playerNode;
+    }
+
+    private Color NextPlayerColor()
+    {
+        var color = new Color();
+        color.FromHSV((_nextPlayerColor++ * 0.618034f) % 1.0f, 0.72f, 1.0f);
+        return color;
     }
 
     private void UpdateControl(float timeStep)
@@ -532,6 +692,7 @@ public sealed class AdvancedNetworking : Application
         var clientReplica = _scene!.GetComponent<ReplicationManager>()?.ClientReplica;
         if (_clientConnection?.IsConnected != true || clientReplica is null)
             return;
+        clientObject.FindComponent<AdvancedNetworkingPlayer>()?.PlayInteraction();
         var playerPosition = _scene.ToAbsoluteWorldPosition(clientObject.GetWorldPosition());
         var aimPosition = GetAimPosition(playerPosition, screenRay);
         var origin = playerPosition + Vector3d.Up * CameraOffset;
@@ -624,6 +785,7 @@ public sealed class AdvancedNetworking : Application
         var replicatedTransform = clientObject?.Node?.FindComponent<ReplicatedTransform>();
         if (clientObject is null || replicatedTransform is null)
             return;
+        clientObject.Node?.FindComponent<AdvancedNetworkingPlayer>()?.PlayInteraction();
         var origin = _scene!.ToRelativeWorldPosition(
             replicatedTransform.SampleTemporalPosition(item.InputTime).Value) + Vector3f.Up * CameraOffset;
         var target = _scene.ToRelativeWorldPosition(item.Target);
@@ -729,6 +891,17 @@ public sealed class AdvancedNetworking : Application
     private bool _autoMovement;
     private bool _autoAim;
     private bool _autoClick;
+    private int _nextPlayerColor;
     private bool _startServerOnLaunch;
     private string _connectOnLaunch = string.Empty;
+    private Texture2D[]? _controlPrompts;
+    private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
+    private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
+    private static readonly Vector4f PanelBackground = new(0.075f, 0.09f, 0.125f, 0.94f);
+    private static readonly Vector4f PanelBorder = new(0.22f, 0.3f, 0.44f, 0.8f);
+    private static readonly Vector4f PrimaryText = new(0.94f, 0.97f, 1.0f, 1.0f);
+    private static readonly Vector4f MutedText = new(0.58f, 0.66f, 0.76f, 1.0f);
+    private static readonly Vector4f AccentText = new(0.35f, 0.85f, 1.0f, 1.0f);
+    private static readonly Vector4f StatusOnline = new(0.35f, 0.9f, 0.55f, 1.0f);
+    private static readonly Vector4f StatusOffline = new(0.95f, 0.55f, 0.35f, 1.0f);
 }

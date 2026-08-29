@@ -13,6 +13,7 @@ using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
 using RedBolt.Resource;
+using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
 using ResourceType = RedBolt.Resource.Resource;
 
@@ -102,9 +103,11 @@ public partial class KinematicCharacter : MoveAndOrbitComponent
     public override void FixedUpdate(float timeStep)
     {
         var cache = GetSubsystem<ResourceCache>()!;
-        var runAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani");
-        var idleAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Idle_Loop.ani");
-        var jumpAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jump_Loop.ani");
+        var runAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Jog_Fwd_Loop.ani");
+        var idleAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Idle_Loop.ani");
+        var jumpAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Jump_Loop.ani");
+        var crouchAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Crouch_Fwd_Loop.ani");
+        var crouchIdleAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Crouch_Idle_Loop.ani");
 
         // Update the in air timer. Reset if grounded
         if (!_onGround)
@@ -120,7 +123,8 @@ public partial class KinematicCharacter : MoveAndOrbitComponent
         _kinematicController!.TryGetTarget(out var kinematicController);
         _onGround = kinematicController!.OnGround;
 
-        if (_inputMap!.Evaluate("Crouch") != 0.0f)
+        var isCrouching = _inputMap!.Evaluate("Crouch") != 0.0f;
+        if (isCrouching)
         {
             kinematicController.Height = 0.9f;
             kinematicController.Offset = new Vector3f(0.0f, 0.45f, 0.0f);
@@ -174,16 +178,23 @@ public partial class KinematicCharacter : MoveAndOrbitComponent
         }
 
         _animController!.TryGetTarget(out var animController);
+        var controllerVelocity = kinematicController.LinearVelocity;
+        var planarSpeed = new Vector2f(controllerVelocity.X, controllerVelocity.Z).Length;
         if (_onGround)
         {
             // Play walk animation if moving on ground, otherwise fade it out
             if (softGrounded && !moveDir.ApproximatelyEquivalent(Vector3f.Zero))
             {
-                animController!.PlayExistingExclusive(new AnimationParameters(runAnimation).Looped(), 0.2f);
+                animController!.PlayExistingExclusive(
+                    new AnimationParameters(isCrouching ? crouchAnimation : runAnimation).Looped(), 0.2f);
+                var movementAnimation = isCrouching ? crouchAnimation : runAnimation;
+                animController.SetSpeed(movementAnimation.Name,
+                    RootMotionAnimation.GetSpeedScale(movementAnimation, planarSpeed));
             }
             else
             {
-                animController!.PlayExistingExclusive(new AnimationParameters(idleAnimation).Looped(), 0.2f);
+                animController!.PlayExistingExclusive(
+                    new AnimationParameters(isCrouching ? crouchIdleAnimation : idleAnimation).Looped(), 0.2f);
             }
         }
         else if (_jumpStarted)

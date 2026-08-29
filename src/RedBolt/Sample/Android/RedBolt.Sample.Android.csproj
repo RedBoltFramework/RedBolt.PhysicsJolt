@@ -26,6 +26,7 @@ For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENS
     <Compile Include="../Physics/**/*.cs" Link="Samples/RedBoltPhysicsJolt/Physics/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../RaycastVehicle/**/*.cs" Link="Samples/RedBoltPhysicsJolt/RaycastVehicle/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../SceneReplication/**/*.cs" Link="Samples/RedBoltPhysicsJolt/SceneReplication/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../CharacterControls/**/*.cs" Link="Samples/RedBoltPhysicsJolt/%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- </redbolt-generated name="android-project-items"> -->
   </ItemGroup>
   <!-- <redbolt-generated name="android-project-import"> -->

@@ -15,6 +15,7 @@ using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
 using RedBolt.Scene;
+using Widgets = RedBolt.SystemUI.Widgets;
 
 internal static class PhysicsProgram
 {
@@ -59,16 +60,28 @@ public class PhysicsSample : Application
         _scene.CreateComponent<Octree>();
         _scene.CreateComponent<PhysicsWorld>();
 
+        var zone = _scene.CreateChild("Zone").CreateComponent<Zone>();
+        zone.SetAmbientColor(new Color(0.30f, 0.34f, 0.42f));
+        zone.SetFogColor(new Color(0.12f, 0.15f, 0.21f));
+        zone.SetFogStart(55.0f);
+        zone.SetFogEnd(110.0f);
+        zone.SetBoundingBox(new BoundingBox(-500.0f, 500.0f));
+
         var lightNode = _scene.CreateChild("DirectionalLight");
-        lightNode.SetDirection(new Vector3f(0.6f, -1.0f, 0.8f));
-        lightNode.CreateComponent<Light>().SetLightType(LightType.Directional);
+        lightNode.SetDirection(new Vector3f(0.45f, -1.0f, 0.55f));
+        var light = lightNode.CreateComponent<Light>();
+        light.SetLightType(LightType.Directional);
+        light.SetColor(new Color(0.92f, 0.96f, 1.0f));
+        light.SetCastShadows(true);
+        light.SetShadowBias(new BiasParameters(0.00025f, 0.5f));
+        light.SetShadowCascade(new CascadeParameters(12.0f, 35.0f, 80.0f, 0.0f, 0.8f));
 
         var floorNode = _scene.CreateChild("Floor");
         floorNode.SetPosition(new Vector3f(0.0f, -0.5f, 0.0f));
-        floorNode.SetScale(new Vector3f(50.0f, 1.0f, 50.0f));
+        floorNode.SetScale(new Vector3f(60.0f, 1.0f, 60.0f));
         var floorObject = floorNode.CreateComponent<StaticModel>();
         floorObject.SetModel(cache.Get<Model>("Models/Box.mdl"));
-        floorObject.SetMaterial(cache.Get<Material>("Materials/StoneTiled.xml"));
+        floorObject.SetMaterial(cache.Get<Material>("Materials/TechnicalDemo/SquareFloorGrid.xml"));
         floorNode.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
         floorNode.CreateComponent<RigidBody>();
 
@@ -80,7 +93,8 @@ public class PhysicsSample : Application
                 boxNode.SetPosition(new Vector3f(x, -y + 8.0f, 0.0f));
                 var boxObject = boxNode.CreateComponent<StaticModel>();
                 boxObject.SetModel(cache.Get<Model>("Models/Box.mdl"));
-                boxObject.SetMaterial(cache.Get<Material>("Materials/StoneSmall.xml"));
+                boxObject.SetMaterial(cache.Get<Material>(
+                    ((x + y) & 1) == 0 ? "Materials/TechnicalDemo/Accent.xml" : "Materials/TechnicalDemo/Dark.xml"));
                 boxObject.SetCastShadows(true);
                 boxNode.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
                 var body = boxNode.CreateComponent<RigidBody>();
@@ -89,6 +103,11 @@ public class PhysicsSample : Application
             }
         }
 
+        CreateMarker(new Vector3f(-12.0f, 2.0f, 6.0f), new Vector3f(1.0f, 4.0f, 1.0f));
+        CreateMarker(new Vector3f(12.0f, 2.0f, 6.0f), new Vector3f(1.0f, 4.0f, 1.0f));
+        CreateMarker(new Vector3f(-12.0f, 0.5f, -8.0f), new Vector3f(1.0f, 1.0f, 1.0f));
+        CreateMarker(new Vector3f(12.0f, 0.5f, -8.0f), new Vector3f(1.0f, 1.0f, 1.0f));
+
         _cameraNode = _scene.CreateChild("Camera");
         _cameraNode.CreateComponent<FreeFlyController>().SetSpeed(20.0f);
         _cameraNode.CreateComponent<Camera>();
@@ -96,10 +115,31 @@ public class PhysicsSample : Application
         _cameraNode.LookAt(new Vector3f(0.0f, 4.0f, 0.0f));
     }
 
+    private void CreateMarker(Vector3f position, Vector3f scale)
+    {
+        var node = _scene!.CreateChild("CalibrationMarker");
+        node.SetPosition(position);
+        node.SetScale(scale);
+        var model = node.CreateComponent<StaticModel>();
+        model.SetModel(Resources.Get<Model>("Models/Box.mdl"));
+        model.SetMaterial(Resources.Get<Material>("Materials/TechnicalDemo/Accent.xml"));
+        model.SetCastShadows(true);
+    }
+
     private void CreateInstructions()
     {
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>((ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
+
+        _controlPrompts =
+        [
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_w.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_a.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_s.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_d.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_right.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_left.png")
+        ];
     }
 
     private void SpawnObject()
@@ -109,7 +149,7 @@ public class PhysicsSample : Application
         boxNode.SetRotation(_cameraNode.GetRotation());
         var boxObject = boxNode.CreateComponent<StaticModel>();
         boxObject.SetModel(Resources.Get<Model>("Models/Box.mdl"));
-        boxObject.SetMaterial(Resources.Get<Material>("Materials/StoneSmall.xml"));
+        boxObject.SetMaterial(Resources.Get<Material>("Materials/TechnicalDemo/Accent.xml"));
         boxObject.SetCastShadows(true);
         boxNode.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
         var body = boxNode.CreateComponent<RigidBody>();
@@ -139,12 +179,32 @@ public class PhysicsSample : Application
         base.Stop();
     }
 
-    private static void DrawInstructions()
+    private void DrawInstructions()
     {
         var windowOpen = true;
-        if (ImGui.Begin("Physics"u8, ref windowOpen, ImGuiWindowFlags.ImGuiWindowFlagsNoResize | ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
-            ImGui.TextUnformatted("WASD + mouse: move camera\nLeft mouse button: throw a box\nEscape: exit"u8);
+        ImGui.SetNextWindowPos(new Vector2f(10.0f, 10.0f), ImGuiCond.ImGuiCondAlways);
+        if (ImGui.Begin("Physics"u8, ref windowOpen,
+                ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
+                ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
+        {
+            for (var i = 0; i < 3; ++i)
+            {
+                ImGui.Image(_controlPrompts![i], PromptIconSize);
+                ImGui.SameLine();
+            }
+            DrawPrompt(_controlPrompts![3], "Move"u8);
+            DrawPrompt(_controlPrompts[4], "Look"u8);
+            DrawPrompt(_controlPrompts[5], "Throw box"u8);
+        }
         ImGui.End();
+    }
+
+    private static void DrawPrompt(Texture2D texture, ReadOnlySpan<byte> label)
+    {
+        ImGui.Image(texture, PromptIconSize);
+        ImGui.SameLine();
+        Widgets.AlignTextToLastItem();
+        ImGui.TextUnformatted(label);
     }
 
     protected override void Setup(EngineParameters parameters)
@@ -174,4 +234,6 @@ public class PhysicsSample : Application
 
     private Scene? _scene;
     private Node? _cameraNode;
+    private Texture2D[]? _controlPrompts;
+    private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
 }

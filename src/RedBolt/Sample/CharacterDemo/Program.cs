@@ -15,6 +15,7 @@ using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
 using RedBolt.Resource;
+using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
 
 internal static class CharacterDemoProgram
@@ -105,8 +106,8 @@ public class CharacterDemo : Application
         // Create static scene content. First create a zone for ambient lighting and fog control
         var zoneNode = _scene.CreateChild("Zone");
         var zone = zoneNode.CreateComponent<Zone>();
-        zone.SetAmbientColor(new Color(0.15f, 0.15f, 0.15f));
-        zone.SetFogColor(new Color(0.5f, 0.5f, 0.7f));
+        zone.SetAmbientColor(new Color(0.5f, 0.5f, 0.5f));
+        zone.SetFogColor(new Color(0.4f, 0.5f, 0.8f));
         zone.SetFogStart(100.0f);
         zone.SetFogEnd(300.0f);
         zone.SetBoundingBox(new BoundingBox(-1000.0f, 1000.0f));
@@ -127,7 +128,7 @@ public class CharacterDemo : Application
         floorNode.SetScale(new Vector3f(200.0f, 1.0f, 200.0f));
         var floorObject = floorNode.CreateComponent<StaticModel>();
         floorObject.SetModel(cache.Get<Model>("Models/Box.mdl"));
-        floorObject.SetMaterial(cache.Get<Material>("Materials/Stone.xml"));
+        floorObject.SetMaterial(cache.Get<Material>("Materials/TechnicalDemo/SquareFloorGrid.xml"));
 
         var floorBody = floorNode.CreateComponent<RigidBody>();
         // Use collision layer bit 2 to mark world scenery. This is what we will raycast against to prevent camera from going
@@ -155,18 +156,6 @@ public class CharacterDemo : Application
             prefabReference.SetPrefab(doorPrefab);
             prefabReference.Inline(PrefabInlineFlag.None);
         }
-        // Create mushrooms of varying sizes
-        const int NumMushrooms = 60;
-        var mushroomPrefab = cache.Get<PrefabResource>("Prefabs/Mushroom.prefab");
-        for (var i = 0; i < NumMushrooms; ++i)
-        {
-            var objectNode = _scene.CreateChild("Mushroom");
-            objectNode.SetPosition(new Vector3f(MathDefs.Random(180.0f) - 90.0f, 0.0f, MathDefs.Random(180.0f) - 90.0f));
-            objectNode.SetRotation(new Quaternion(0.0f, MathDefs.Random(360.0f), 0.0f));
-            objectNode.SetScale(2.0f + MathDefs.Random(5.0f));
-            objectNode.CreateComponent<PrefabReference>().SetPrefab(mushroomPrefab);
-        }
-
         // Create movable boxes. Let them fall from the sky at first
         const int NumBoxes = 100;
         for (var i = 0; i < NumBoxes; ++i)
@@ -183,7 +172,7 @@ public class CharacterDemo : Application
             objectNode.SetScale(scale);
             var boxObject = objectNode.CreateComponent<StaticModel>();
             boxObject.SetModel(cache.Get<Model>("Models/Box.mdl"));
-            boxObject.SetMaterial(cache.Get<Material>("Materials/Stone.xml"));
+            boxObject.SetMaterial(cache.Get<Material>("Materials/TechnicalDemo/Dark.xml"));
             boxObject.SetCastShadows(true);
 
             var body = objectNode.CreateComponent<RigidBody>();
@@ -199,19 +188,18 @@ public class CharacterDemo : Application
     {
         var cache = Resources;
 
-        var objectNode = _scene!.CreateChild("Jack");
+        var objectNode = _scene!.CreateChild("Character");
         objectNode.SetPosition(new Vector3f(0.0f, 1.0f, 0.0f));
 
-        // spin node
+        // Keep the model's native +Z forward direction aligned with the character node.
         var adjustNode = objectNode.CreateChild("AdjNode");
-        adjustNode.SetRotation(new Quaternion(180.0f, new Vector3f(0.0f, 1.0f, 0.0f)));
 
         // Create the rendering component + animation controller
         var model = adjustNode.CreateComponent<AnimatedModel>();
-        model.SetModel(cache.Get<Model>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Models/Sphere.005_Retopology.004.mdl"));
-        model.SetMaterial(0, cache.Get<Material>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Materials/MI_Superhero_Male_LitNormalMap.xml"));
-        model.SetMaterial(1, cache.Get<Material>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Materials/MI_Hair_1_LitNormalMap.xml"));
-        model.SetMaterial(2, cache.Get<Material>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Materials/MI_Eyes_LitNormalMap.xml"));
+        model.SetModel(cache.Get<Model>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Models/Mannequin.mdl"));
+        var characterMaterial = cache.Get<Material>("Materials/TechnicalDemo/Yellow.xml");
+        model.SetMaterial(0, characterMaterial);
+        model.SetMaterial(1, characterMaterial);
         model.SetCastShadows(true);
         adjustNode.CreateComponent<AnimationController>();
 
@@ -247,15 +235,7 @@ public class CharacterDemo : Application
     private void CreateInstructions()
     {
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
-        _controlPrompts =
-        [
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_w.png"),
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_a.png"),
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_s.png"),
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_d.png"),
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_right.png"),
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_space.png")
-        ];
+        _controlPrompts = new CharacterControlPrompts(Resources);
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>(
             (ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
 
@@ -349,25 +329,16 @@ public class CharacterDemo : Application
     private void DrawInstructions()
     {
         var windowOpen = true;
+        ImGui.SetNextWindowPos(new Vector2f(10.0f, 10.0f), ImGuiCond.ImGuiCondAlways);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColWindowBg, HudBackground);
         if (ImGui.Begin("Character Demo"u8, ref windowOpen,
                 ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
                 ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            for (var i = 0; i < 4; ++i)
-            {
-                ImGui.Image(_controlPrompts[i]!, new Vector2f(24.0f, 24.0f));
-                ImGui.SameLine();
-            }
-            ImGui.TextUnformatted("Move"u8);
-            ImGui.Image(_controlPrompts[4]!, new Vector2f(24.0f, 24.0f));
-            ImGui.SameLine();
-            ImGui.TextUnformatted("Hold to rotate camera"u8);
-            ImGui.Image(_controlPrompts[5]!, new Vector2f(24.0f, 24.0f));
-            ImGui.SameLine();
-            ImGui.TextUnformatted(
-                "Jump   F: toggle 1st/3rd person   Escape: exit"u8);
+            _controlPrompts!.Draw(false, false);
         }
         ImGui.End();
+        ImGui.PopStyleColor();
     }
 
     protected override void Setup(EngineParameters parameters)
@@ -420,5 +391,6 @@ public class CharacterDemo : Application
     /// <summary>First person camera flag.</summary>
     private bool _firstPerson;
     private DirectionalPadAdapter? _dPadAdapter;
-    private Texture2D?[] _controlPrompts = [];
+    private CharacterControlPrompts? _controlPrompts;
+    private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
 }

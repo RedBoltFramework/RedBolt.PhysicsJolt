@@ -23,6 +23,7 @@ using RedBolt.PhysicsJolt;
 using RedBolt.Replica;
 using RedBolt.Resource;
 using RedBolt.Scene;
+using Widgets = RedBolt.SystemUI.Widgets;
 
 internal static class SceneReplicationProgram
 {
@@ -62,7 +63,16 @@ public partial class SceneReplicationPlayer : NetworkBehavior
         destination.WriteColor(GetComponent<Light>()!.Color);
 
     public override void InitializeFromSnapshot(NetworkFrame frame, Deserializer source, bool isOwned) =>
-        GetComponent<Light>()!.SetColor(source.ReadColor());
+        SetPlayerColor(source.ReadColor());
+
+    public void SetPlayerColor(Color color)
+    {
+        GetComponent<Light>()!.SetColor(color);
+        var model = GetComponent<StaticModel>()!;
+        _playerMaterial = model.GetMaterial()!.Clone();
+        _playerMaterial.SetShaderParameter("MatDiffColor", color.ToVector4());
+        model.SetMaterial(_playerMaterial);
+    }
 
     public override bool PrepareUnreliableFeedback(NetworkFrame frame) => true;
 
@@ -81,6 +91,7 @@ public partial class SceneReplicationPlayer : NetworkBehavior
     }
 
     private NetworkFrame? _lastFeedbackFrame;
+    private Material? _playerMaterial;
 }
 
 internal sealed class ReplicatedDataChannelConnection : DataChannelConnection
@@ -142,6 +153,7 @@ public sealed class SceneReplication : Application
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context);
         Context.RegisterAssembly(typeof(SceneReplicationPlayer).Assembly);
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
+        _controlPrompts = LoadControlPrompts();
         _addressBuffer = Marshal.AllocHGlobal(AddressBufferSize);
         Marshal.WriteByte(_addressBuffer, 0, 0);
         if (!string.IsNullOrWhiteSpace(_connectOnLaunch))
@@ -210,32 +222,58 @@ public sealed class SceneReplication : Application
         var zoneNode = _scene.CreateChild("Zone");
         var zone = zoneNode.CreateComponent<Zone>();
         zone.SetBoundingBox(new BoundingBox(-1000.0f, 1000.0f));
-        zone.SetAmbientColor(new Color(0.1f, 0.1f, 0.1f));
-        zone.SetFogStart(100.0f);
-        zone.SetFogEnd(300.0f);
+        zone.SetAmbientColor(new Color(0.24f, 0.27f, 0.34f));
+        zone.SetFogColor(new Color(0.055f, 0.065f, 0.085f));
+        zone.SetFogStart(70.0f);
+        zone.SetFogEnd(160.0f);
 
         var lightNode = _scene.CreateChild("DirectionalLight");
         lightNode.SetDirection(new Vector3f(0.5f, -1.0f, 0.5f));
         var light = lightNode.CreateComponent<Light>();
         light.SetLightType(LightType.Directional);
-        light.SetColor(new Color(0.2f, 0.2f, 0.2f));
+        light.SetColor(new Color(0.65f, 0.68f, 0.72f));
         light.SetSpecularIntensity(1.0f);
+        light.SetCastShadows(true);
 
         var boxModel = Resources.Get<Model>("Models/Box.mdl");
-        var stoneMaterial = Resources.Get<Material>("Materials/Stone.xml");
-        for (var y = -20; y <= 20; ++y)
+        var floorMaterial = Resources.Get<Material>("Materials/TechnicalDemo/SquareFloorGrid.xml");
+        var darkMaterial = Resources.Get<Material>("Materials/TechnicalDemo/Dark.xml");
+        var accentMaterial = Resources.Get<Material>("Materials/TechnicalDemo/Accent.xml");
+
+        var floorNode = _scene.CreateChild("Floor");
+        floorNode.SetPosition(new Vector3f(0.0f, -0.5f, 0.0f));
+        floorNode.SetScale(new Vector3f(100.0f, 1.0f, 100.0f));
+        var floorObject = floorNode.CreateComponent<StaticModel>();
+        floorObject.SetModel(boxModel);
+        floorObject.SetMaterial(floorMaterial);
+        floorNode.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
+        floorNode.CreateComponent<RigidBody>().Friction = 1.0f;
+
+        var random = new Random(1);
+        for (var i = 0; i < 64; ++i)
         {
-            for (var x = -20; x <= 20; ++x)
+            var scale = new Vector3f(
+                RandomRange(random, 1.2f, 4.0f),
+                RandomRange(random, 0.5f, 1.8f),
+                RandomRange(random, 1.2f, 4.0f));
+            float x;
+            float z;
+            do
             {
-                var floorNode = _scene.CreateChild("FloorTile");
-                floorNode.SetPosition(new Vector3f(x * 20.2f, -0.5f, y * 20.2f));
-                floorNode.SetScale(new Vector3f(20.0f, 1.0f, 20.0f));
-                var floorObject = floorNode.CreateComponent<StaticModel>();
-                floorObject.SetModel(boxModel);
-                floorObject.SetMaterial(stoneMaterial);
-                floorNode.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
-                floorNode.CreateComponent<RigidBody>().Friction = 1.0f;
-            }
+                x = RandomRange(random, -44.0f, 44.0f);
+                z = RandomRange(random, -44.0f, 44.0f);
+            } while (x * x + z * z < 100.0f);
+
+            var obstacle = _scene.CreateChild("TechnicalObstacle");
+            obstacle.SetPosition(new Vector3f(x, scale.Y * 0.5f, z));
+            obstacle.SetRotation(new Quaternion(0.0f, RandomRange(random, 0.0f, 360.0f), 0.0f));
+            obstacle.SetScale(scale);
+            var obstacleModel = obstacle.CreateComponent<StaticModel>();
+            obstacleModel.SetModel(boxModel);
+            obstacleModel.SetMaterial(i % 8 == 0 ? accentMaterial : darkMaterial);
+            obstacleModel.SetCastShadows(true);
+            obstacle.CreateComponent<CollisionShape>().SetBox(Vector3f.One);
+            obstacle.CreateComponent<RigidBody>().Friction = 1.0f;
         }
 
         _cameraNode = _scene.CreateChild("Camera");
@@ -246,16 +284,41 @@ public sealed class SceneReplication : Application
 
     private void DrawInterface()
     {
-        ImGui.SetNextWindowSize(new Vector2f(430.0f, 270.0f), ImGuiCond.ImGuiCondFirstUseEver);
+        var clientConnected = _clientConnection?.IsConnected == true;
+        var serverRunning = _server?.IsListening == true;
+        var hasControls = GetPlayerObject() is not null;
+        var windowHeight = hasControls ? 430.0f : clientConnected || serverRunning ? 315.0f : 350.0f;
+        ImGui.SetNextWindowPos(new Vector2f(18.0f, 18.0f), ImGuiCond.ImGuiCondAlways);
+        ImGui.SetNextWindowSize(new Vector2f(420.0f, windowHeight), ImGuiCond.ImGuiCondAlways);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowRounding, 12.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowBorderSize, 1.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowPadding, new Vector2f(14.0f, 14.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarFrameRounding, 6.0f);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColWindowBg, HudBackground);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColBorder, PanelBorder);
         var open = true;
         if (ImGui.Begin("Scene Replication (Jolt)"u8, ref open,
+            ImGuiWindowFlags.ImGuiWindowFlagsNoDecoration |
+            ImGuiWindowFlags.ImGuiWindowFlagsNoMove |
             ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            var clientConnected = _clientConnection?.IsConnected == true;
-            var serverRunning = _server?.IsListening == true;
+            ImGui.PushStyleColor(ImGuiCol.ImGuiColText, PrimaryText);
+            ImGui.TextUnformatted("REPLICATION LAB"u8);
+            ImGui.PopStyleColor();
+            ImGui.PushStyleColor(ImGuiCol.ImGuiColText, MutedText);
+            ImGui.TextUnformatted("Authoritative Jolt rigid-body replication"u8);
+            ImGui.PopStyleColor();
+            ImGui.Dummy(new Vector2f(1.0f, 7.0f));
+
+            BeginPanel("##Session"u8, clientConnected || serverRunning ? 76.0f : 112.0f);
+            DrawSectionLabel("SESSION"u8);
             if (!clientConnected && !serverRunning)
             {
-                ImGui.InputText("Server address"u8, _addressBuffer, AddressBufferSize);
+                ImGui.PushStyleColor(ImGuiCol.ImGuiColText, MutedText);
+                ImGui.TextUnformatted("Server address"u8);
+                ImGui.PopStyleColor();
+                ImGui.SetNextItemWidth(-1.0f);
+                ImGui.InputText("##ServerAddress"u8, _addressBuffer, AddressBufferSize);
                 if (ImGui.Button("Connect"u8))
                     Connect();
 #if !REDBOLT_PLATFORM_BROWSER
@@ -266,17 +329,86 @@ public sealed class SceneReplication : Application
             }
             else if (ImGui.Button("Disconnect"u8))
                 Disconnect();
+            EndPanel();
 
+            ImGui.Dummy(new Vector2f(1.0f, 8.0f));
+            BeginPanel("##Telemetry"u8, 116.0f);
+            DrawSectionLabel("TELEMETRY"u8);
             var mode = clientConnected ? "Client connected" : serverRunning ? "Server running" : "Offline";
+            ImGui.PushStyleColor(ImGuiCol.ImGuiColText,
+                clientConnected || serverRunning ? StatusOnline : StatusOffline);
             ImGui.TextUnformatted(Encoding.UTF8.GetBytes(mode));
-            ImGui.Separator();
+            ImGui.PopStyleColor();
             ImGui.TextUnformatted(Encoding.UTF8.GetBytes($"Packets in/out: {_statistics.PacketsInPerSec} / {_statistics.PacketsOutPerSec}"));
             ImGui.TextUnformatted(Encoding.UTF8.GetBytes($"Bytes in/out: {_statistics.BytesInPerSec} / {_statistics.BytesOutPerSec}"));
             ImGui.TextUnformatted(Encoding.UTF8.GetBytes($"Connections: {_connectionCount}"));
-            if (GetPlayerObject() is not null)
-                ImGui.TextUnformatted("WASD: roll ball   RMB + mouse: orbit camera"u8);
+            EndPanel();
+
+            if (hasControls)
+            {
+                ImGui.Dummy(new Vector2f(1.0f, 8.0f));
+                BeginPanel("##Controls"u8, 100.0f);
+                DrawSectionLabel("CONTROLS"u8);
+                DrawMovementPrompt("Roll ball"u8);
+                DrawPrompt(_controlPrompts![4], "Orbit camera"u8);
+                EndPanel();
+            }
         }
         ImGui.End();
+        ImGui.PopStyleColor(2);
+        ImGui.PopStyleVar(4);
+    }
+
+    private static void BeginPanel(ReadOnlySpan<byte> id, float height)
+    {
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColChildBg, PanelBackground);
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColBorder, PanelBorder);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarChildRounding, 9.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarChildBorderSize, 1.0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowPadding, new Vector2f(12.0f, 10.0f));
+        ImGui.BeginChild(id, new Vector2f(ImGui.GetContentRegionAvail().X, height),
+            ImGuiChildFlags.ImGuiChildFlagsBorders);
+    }
+
+    private static void EndPanel()
+    {
+        ImGui.EndChild();
+        ImGui.PopStyleVar(3);
+        ImGui.PopStyleColor(2);
+    }
+
+    private static void DrawSectionLabel(ReadOnlySpan<byte> label)
+    {
+        ImGui.PushStyleColor(ImGuiCol.ImGuiColText, AccentText);
+        ImGui.TextUnformatted(label);
+        ImGui.PopStyleColor();
+    }
+
+    private Texture2D[] LoadControlPrompts() =>
+    [
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_w.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_a.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_s.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_d.png"),
+        Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_right.png")
+    ];
+
+    private void DrawMovementPrompt(ReadOnlySpan<byte> label)
+    {
+        for (var i = 0; i < 3; ++i)
+        {
+            ImGui.Image(_controlPrompts![i], PromptIconSize);
+            ImGui.SameLine();
+        }
+        DrawPrompt(_controlPrompts![3], label);
+    }
+
+    private static void DrawPrompt(Texture2D texture, ReadOnlySpan<byte> label)
+    {
+        ImGui.Image(texture, PromptIconSize);
+        ImGui.SameLine();
+        Widgets.AlignTextToLastItem();
+        ImGui.TextUnformatted(label);
     }
 
     private void MoveCamera()
@@ -351,11 +483,15 @@ public sealed class SceneReplication : Application
         body.Friction = 1.0f;
         body.LinearDamping = 0.5f;
         body.AngularDamping = 0.5f;
-        playerNode.GetComponent<Light>()!.SetColor(new Color(
-            Random.Shared.Next(2) == 0 ? 0.5f : 1.0f,
-            Random.Shared.Next(2) == 0 ? 0.5f : 1.0f,
-            Random.Shared.Next(2) == 0 ? 0.5f : 1.0f));
+        playerNode.GetComponent<SceneReplicationPlayer>()!.SetPlayerColor(NextPlayerColor());
         return playerNode;
+    }
+
+    private Color NextPlayerColor()
+    {
+        var color = new Color();
+        color.FromHSV((_nextPlayerColor++ * 0.618034f) % 1.0f, 0.72f, 1.0f);
+        return color;
     }
 
     private Node? GetPlayerObject() =>
@@ -436,6 +572,9 @@ public sealed class SceneReplication : Application
             _statistics += connection.Statistics.Snapshot;
     }
 
+    private static float RandomRange(Random random, float minimum, float maximum) =>
+        minimum + (float)random.NextDouble() * (maximum - minimum);
+
     private Scene? _scene;
     private Node? _cameraNode;
     private DataChannelServer? _server;
@@ -447,6 +586,17 @@ public sealed class SceneReplication : Application
     private float _statisticsTime;
     private NetworkStatisticsSnapshot _statistics;
     private int _connectionCount;
+    private int _nextPlayerColor;
     private bool _startServerOnLaunch;
     private string _connectOnLaunch = string.Empty;
+    private Texture2D[]? _controlPrompts;
+    private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
+    private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
+    private static readonly Vector4f PanelBackground = new(0.075f, 0.09f, 0.125f, 0.94f);
+    private static readonly Vector4f PanelBorder = new(0.22f, 0.3f, 0.44f, 0.8f);
+    private static readonly Vector4f PrimaryText = new(0.94f, 0.97f, 1.0f, 1.0f);
+    private static readonly Vector4f MutedText = new(0.58f, 0.66f, 0.76f, 1.0f);
+    private static readonly Vector4f AccentText = new(0.35f, 0.85f, 1.0f, 1.0f);
+    private static readonly Vector4f StatusOnline = new(0.35f, 0.9f, 0.55f, 1.0f);
+    private static readonly Vector4f StatusOffline = new(0.95f, 0.55f, 0.35f, 1.0f);
 }

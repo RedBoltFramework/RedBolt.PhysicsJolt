@@ -19,6 +19,9 @@
     "RedBolt.Native.Jolt"
   ],
   "webExtension": "../RedBolt.Network/src/RedBolt/Sample/Web/wwwroot/extension.js",
+  "additionalSources": [
+    "CharacterControls/**/*.cs"
+  ],
   "samples": [
     { "id": "advanced-networking", "name": "Advanced Networking", "applicationType": "RedBolt.Sample.AdvancedNetworking.AdvancedNetworking", "source": "AdvancedNetworking" },
     { "id": "character-demo", "name": "Character Demo", "applicationType": "RedBolt.Sample.CharacterDemo.CharacterDemo", "source": "CharacterDemo" },

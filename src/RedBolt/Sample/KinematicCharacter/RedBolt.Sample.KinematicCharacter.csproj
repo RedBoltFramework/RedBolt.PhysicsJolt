@@ -11,6 +11,8 @@ For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENS
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../CharacterControls/CharacterControlPrompts.cs" Link="CharacterControls/CharacterControlPrompts.cs" />
+    <Compile Include="../CharacterControls/RootMotionAnimation.cs" Link="CharacterControls/RootMotionAnimation.cs" />
     <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Core/RedBolt.Core.csproj" />
     <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/DearImGui/RedBolt.DearImGui.csproj" />
     <ProjectReference Include="$(RedBoltRoot)/src/RedBolt/Generator/Reflection/RedBolt.Generator.Reflection.csproj"

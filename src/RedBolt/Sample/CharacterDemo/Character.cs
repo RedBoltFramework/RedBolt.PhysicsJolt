@@ -11,6 +11,7 @@ using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
 using RedBolt.Resource;
+using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
 using ResourceType = RedBolt.Resource.Resource;
 
@@ -18,7 +19,7 @@ using ResourceType = RedBolt.Resource.Resource;
 [Reflected]
 public partial class Character : MoveAndOrbitComponent
 {
-    private const float MoveForce = 0.8f;
+    private const float MoveForce = 1.1f;
     private const float InairMoveForce = 0.02f;
     private const float BrakeForce = 0.2f;
     private const float JumpForce = 7.0f;
@@ -57,13 +58,21 @@ public partial class Character : MoveAndOrbitComponent
     public override void FixedUpdate(float timeStep)
     {
         var cache = GetSubsystem<ResourceCache>()!;
-        var runAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani");
-        var idleAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Idle_Loop.ani");
-        var jumpAnimation = cache.Get<Animation>("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jump_Loop.ani");
+        var runAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Jog_Fwd_Loop.ani");
+        var idleAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Idle_Loop.ani");
+        var jumpAnimation = cache.Get<Animation>("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Jump_Loop.ani");
 
         /// \todo Could cache the components for faster access instead of finding them each frame
         var body = GetComponent<RigidBody>()!;
+        var collisionShape = GetComponent<CollisionShape>()!;
         var animCtrl = Node.FindComponent<AnimationController>()!;
+
+        var groundProbe = default(PhysicsRaycastResult);
+        Scene!.GetComponent<PhysicsWorld>()!.ConvexCast(ref groundProbe, collisionShape,
+            Node.Position + Vector3f.Up * 0.05f, Node.Rotation,
+            Node.Position - Vector3f.Up * 0.15f, Node.Rotation, body.CollisionMask);
+        if (groundProbe.Body is not null && groundProbe.Normal.Y > 0.75f)
+            _onGround = true;
 
         // Update the in air timer. Reset if grounded
         if (!_onGround)
@@ -87,6 +96,7 @@ public partial class Character : MoveAndOrbitComponent
         // If in air, allow control, but slower than when on ground
         body.ApplyImpulse(rot * moveDir * (softGrounded ? MoveForce : InairMoveForce));
 
+        var jumpStarted = false;
         if (softGrounded)
         {
             // When on ground, apply a braking force to limit maximum ground velocity
@@ -101,6 +111,7 @@ public partial class Character : MoveAndOrbitComponent
                     body.ApplyImpulse(Vector3f.Up * JumpForce);
                     _okToJump = false;
                     _onGround = false;
+                    jumpStarted = true;
                     animCtrl.PlayNewExclusive(new AnimationParameters(jumpAnimation).KeepOnCompletion(), 0.2f);
                 }
             }
@@ -108,7 +119,10 @@ public partial class Character : MoveAndOrbitComponent
                 _okToJump = true;
         }
 
-        if (!_onGround)
+        // A resting contact may be absent for an occasional physics step. Keep the idle pose during
+        // that short grace period, but switch immediately when a jump actually has upward velocity.
+        var airborne = jumpStarted || !_onGround && (!softGrounded || velocity.Y > 0.1f);
+        if (airborne)
         {
             animCtrl.PlayExistingExclusive(new AnimationParameters(jumpAnimation).KeepOnCompletion(), 0.2f);
         }
@@ -120,9 +134,9 @@ public partial class Character : MoveAndOrbitComponent
             else
                 animCtrl.PlayExistingExclusive(new AnimationParameters(idleAnimation).Looped(), 0.2f);
 
-            // Set walk animation speed proportional to velocity
-            animCtrl.SetSpeed("ThirdParty/Quaternius/UniversalCharacter.glb.d/Animations/Jog_Fwd_Loop.ani",
-                planeVelocity.Length * 0.3f);
+            // Match foot travel from the source root motion to actual physical velocity.
+            animCtrl.SetSpeed("ThirdParty/Quaternius/TechnicalDummy.glb.d/Animations/Jog_Fwd_Loop.ani",
+                RootMotionAnimation.GetSpeedScale(runAnimation, planeVelocity.Length));
         }
 
         // Reset grounded flag for next frame

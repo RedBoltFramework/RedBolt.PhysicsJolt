@@ -6,12 +6,9 @@ namespace RedBolt.Sample.RaycastVehicle;
 
 using System.Collections.Generic;
 
-using Microsoft.Extensions.Logging;
-
 using RedBolt.Core;
 using RedBolt.Graphics;
 using RedBolt.Input;
-using RedBolt.Logging;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
 using RedBolt.Resource;
@@ -22,7 +19,8 @@ using ResourceType = RedBolt.Resource.Resource;
 [Reflected]
 public sealed partial class Vehicle2 : MoveAndOrbitComponent
 {
-    private const float ChassisWidth = 2.6f;
+    private const float ChassisWidth = 2.35f;
+    private const string PoliceCarRoot = "ThirdParty/Quaternius/PoliceCar.glb.d/";
 
     private readonly List<Node> _particleEmitterNodes = [];
     private readonly Vector3f[] _connectionPoints = new Vector3f[4];
@@ -106,28 +104,25 @@ public sealed partial class Vehicle2 : MoveAndOrbitComponent
         hullBody.AngularDamping = 0.5f;
         hullBody.CollisionLayer = 1;
 
-        var boxExtents = new Vector3f(2.3f, 1.0f, 4.0f);
+        var boxExtents = new Vector3f(2.35f, 1.15f, 4.8f);
         node.CreateComponent<CollisionShape>().SetBox(boxExtents);
-        var modelNode = node.CreateChild();
-        modelNode.SetPosition(new Vector3f(0.0f, -1.0f, 0.0f));
-        modelNode.SetRotation(new Quaternion(0.0f, 180.0f, 0.0f));
-        modelNode.SetScale(5.0f);
+        var modelNode = node.CreateChild("PoliceBody");
+        modelNode.SetPosition(new Vector3f(0.0f, -0.55f, 0.0f));
+        modelNode.SetScale(1.35f);
         var hullObject = modelNode.CreateComponent<StaticModel>();
         hullObject.SetModel(GetSubsystem<ResourceCache>()!.Get<Model>(
-            "ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Models/vehicle-racer.mdl"));
-        hullObject.SetMaterial(GetSubsystem<ResourceCache>()!.Get<Material>(
-            "ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Materials/colormap_Lit.xml"));
+            $"{PoliceCarRoot}Models/PoliceBody.mdl"));
+        SetPoliceBodyMaterials(hullObject);
         hullObject.SetCastShadows(true);
-        const float connectionHeight = -0.4f;
+        const float connectionHeight = -0.38f;
         var wheelDirection = new Vector3f(0.0f, -1.0f, 0.0f);
         var wheelAxle = new Vector3f(-1.0f, 0.0f, 0.0f);
-        var wheelX = ChassisWidth / 2.0f - _wheelWidth;
-        _connectionPoints[0] = new Vector3f(-wheelX, connectionHeight, 2.5f - _wheelRadius * 2.0f);
-        _connectionPoints[1] = new Vector3f(wheelX, connectionHeight, 2.5f - _wheelRadius * 2.0f);
-        _connectionPoints[2] = new Vector3f(-wheelX, connectionHeight, -2.5f + _wheelRadius * 2.0f);
-        _connectionPoints[3] = new Vector3f(wheelX, connectionHeight, -2.5f + _wheelRadius * 2.0f);
+        var wheelX = ChassisWidth / 2.0f - _wheelWidth / 2.0f;
+        _connectionPoints[0] = new Vector3f(-wheelX, connectionHeight, 1.55f);
+        _connectionPoints[1] = new Vector3f(wheelX, connectionHeight, 1.55f);
+        _connectionPoints[2] = new Vector3f(-wheelX, connectionHeight, -1.55f);
+        _connectionPoints[3] = new Vector3f(wheelX, connectionHeight, -1.55f);
 
-        string[] wheelModels = ["wheel-fl.mdl", "wheel-fr.mdl", "wheel-bl.mdl", "wheel-br.mdl"];
         for (var wheelIndex = 0; wheelIndex < _connectionPoints.Length; ++wheelIndex)
         {
             var connectionPoint = _connectionPoints[wheelIndex];
@@ -158,18 +153,31 @@ public sealed partial class Vehicle2 : MoveAndOrbitComponent
             wheelVisual.SetRotation(connectionPoint.X >= 0.0f
                 ? new Quaternion(0.0f, 0.0f, 90.0f)
                 : new Quaternion(0.0f, 0.0f, -90.0f));
-            wheelVisual.SetScale(new Vector3f(3.2f, 4.0f, 4.0f));
+            wheelVisual.SetScale(1.82f);
             var wheelObject = wheelVisual.CreateComponent<StaticModel>();
             wheelObject.SetModel(GetSubsystem<ResourceCache>()!.Get<Model>(
-                $"ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Models/{wheelModels[wheelIndex]}"));
-            wheelObject.SetMaterial(GetSubsystem<ResourceCache>()!.Get<Material>(
-                "ThirdParty/KenneyToyCar/vehicle-racer.glb.d/Materials/colormap_Lit.xml"));
+                $"{PoliceCarRoot}Models/PoliceWheel.mdl"));
+            wheelObject.SetMaterial(0, GetSubsystem<ResourceCache>()!.Get<Material>(
+                $"{PoliceCarRoot}Materials/Black_Lit.xml"));
+            wheelObject.SetMaterial(1, GetSubsystem<ResourceCache>()!.Get<Material>(
+                $"{PoliceCarRoot}Materials/Grey_Lit.xml"));
             wheelObject.SetCastShadows(true);
             CreateEmitter(connectionPoint);
         }
 
         _emittersCreated = true;
         vehicle.ResetWheels();
+    }
+
+    private void SetPoliceBodyMaterials(StaticModel model)
+    {
+        var cache = GetSubsystem<ResourceCache>()!;
+        string[] materials =
+        [
+            "White", "Windows", "Grey", "Headlights", "Black", "TailLights", "WhiteLights", "BlueLights"
+        ];
+        for (var i = 0; i < materials.Length; ++i)
+            model.SetMaterial(i, cache.Get<Material>($"{PoliceCarRoot}Materials/{materials[i]}_Lit.xml"));
     }
 
     public override void ApplyAttributes()
@@ -222,9 +230,6 @@ public sealed partial class Vehicle2 : MoveAndOrbitComponent
                 emitterNode.SetWorldPosition(wheel.ContactPosition);
                 if (!emitter.IsEmitting())
                     emitter.SetEmitting(true);
-                Log.GetLogger().LogDebug(
-                    "GetWheelSkidInfoCumulative() = {SkidInfo} {MaxSideSlipSpeed}",
-                    wheel.SkidInfoCumulative, vehicle.MaxSideSlipSpeed);
             }
             else if (emitter.IsEmitting())
                 emitter.SetEmitting(false);
