@@ -99,7 +99,8 @@ public class CharacterDemo : Application
         var renderPipeline = _scene.CreateComponent<RenderPipeline>();
         var renderPipelineSettings = renderPipeline.Settings;
         var sceneProcessorSettings = renderPipelineSettings.SceneProcessor;
-        sceneProcessorSettings.PcfKernelSize = 2;
+        // Preserve a hard shadow edge; desktop resolution is increased below to avoid aliasing instead of blurring it.
+        sceneProcessorSettings.PcfKernelSize = 1;
         var isMobile = ProcessUtils.IsMobile();
         if (!isMobile)
             sceneProcessorSettings.DirectionalShadowSize = 2048;
