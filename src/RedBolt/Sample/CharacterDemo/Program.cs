@@ -65,6 +65,7 @@ public class CharacterDemo : Application
         base.Start();
 
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context);
+        _isMobile = ProcessUtils.IsMobile();
         _dPadAdapter = new DirectionalPadAdapter();
         _dPadAdapter.SetEnabled(true);
 
@@ -99,13 +100,12 @@ public class CharacterDemo : Application
         var renderPipeline = _scene.CreateComponent<RenderPipeline>();
         var renderPipelineSettings = renderPipeline.Settings;
         var sceneProcessorSettings = renderPipelineSettings.SceneProcessor;
-        var isMobile = ProcessUtils.IsMobile();
         // Smooth the remaining sub-pixel stair steps; use the wider desktop kernel where the sample budget allows it.
-        sceneProcessorSettings.PcfKernelSize = isMobile ? 3 : 5;
-        if (!isMobile)
+        sceneProcessorSettings.PcfKernelSize = _isMobile ? 3 : 5;
+        if (!_isMobile)
             sceneProcessorSettings.DirectionalShadowSize = 2048;
         renderPipelineSettings.SceneProcessor = sceneProcessorSettings;
-        if (!isMobile)
+        if (!_isMobile)
         {
             var shadowMapAllocatorSettings = renderPipelineSettings.ShadowMapAllocator;
             shadowMapAllocatorSettings.ShadowAtlasPageSize = 4096;
@@ -301,12 +301,11 @@ public class CharacterDemo : Application
             {
                 // Set rotation already here so that it's updated every rendering frame instead of every physics frame
                 character.Node.SetRotation(new Quaternion(character.GetYaw(), Vector3f.Up));
-
-                // Switch between 1st and 3rd person
-                if (Input.GetKeyPress(Key.F))
-                    _firstPerson = !_firstPerson;
             }
         }
+        if (_toggleViewRequested || !ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.F))
+            _firstPerson = !_firstPerson;
+        _toggleViewRequested = false;
     }
 
     /// <summary>Handle application post-update. Update camera position after character has moved.</summary>
@@ -362,10 +361,13 @@ public class CharacterDemo : Application
                 ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
                 ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            _controlPrompts!.Draw(false, false);
+            _controlPrompts!.Draw(false, false, _isMobile);
         }
         ImGui.End();
         ImGui.PopStyleColor();
+
+        if (_isMobile)
+            _toggleViewRequested |= _controlPrompts!.DrawMobileControls(Input, false, false).ViewPressed;
     }
 
     protected override void Setup(EngineParameters parameters)
@@ -417,6 +419,8 @@ public class CharacterDemo : Application
     private WeakReference<Character>? _character;
     /// <summary>First person camera flag.</summary>
     private bool _firstPerson;
+    private bool _isMobile;
+    private bool _toggleViewRequested;
     private DirectionalPadAdapter? _dPadAdapter;
     private CharacterControlPrompts? _controlPrompts;
     private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);

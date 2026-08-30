@@ -47,6 +47,9 @@ public sealed class RaycastVehicleDemo : Application
     private Vehicle2? _vehicle;
     private Viewport? _viewport;
     private bool _drawDebug;
+    private bool _isMobile;
+    private bool _toggleDebugRequested;
+    private bool _debugTouchDown;
     private Texture2D[]? _controlPrompts;
     private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
 
@@ -69,6 +72,7 @@ public sealed class RaycastVehicleDemo : Application
     {
         base.Start();
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context.Instance);
+        _isMobile = ProcessUtils.IsMobile();
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
 
         CreateScene();
@@ -243,8 +247,10 @@ public sealed class RaycastVehicleDemo : Application
             return;
         }
 
-        if (_vehicle is not null && !ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.Space))
+        if (_vehicle is not null && (_toggleDebugRequested
+                || !ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.Space)))
             _drawDebug = !_drawDebug;
+        _toggleDebugRequested = false;
     }
 
     private void HandlePostUpdate()
@@ -293,17 +299,73 @@ public sealed class RaycastVehicleDemo : Application
                 ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
                 ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            for (var i = 0; i < 3; ++i)
+            if (_isMobile)
             {
-                ImGui.Image(_controlPrompts![i], PromptIconSize);
-                ImGui.SameLine();
+                ImGui.TextUnformatted("Drag left half to drive"u8);
+                ImGui.TextUnformatted("Drag right half to look"u8);
+                ImGui.TextUnformatted("Use the action buttons below"u8);
             }
-            DrawPrompt(_controlPrompts![3], "Drive"u8);
-            DrawPrompt(_controlPrompts[4], "Rotate camera / drag touch"u8);
-            DrawPrompt(_controlPrompts[5], "Brake"u8);
-            DrawPrompt(_controlPrompts[6], _drawDebug ? "Hide physics debug"u8 : "Show physics debug"u8);
+            else
+            {
+                for (var i = 0; i < 3; ++i)
+                {
+                    ImGui.Image(_controlPrompts![i], PromptIconSize);
+                    ImGui.SameLine();
+                }
+                DrawPrompt(_controlPrompts![3], "Drive"u8);
+                DrawPrompt(_controlPrompts[4], "Rotate camera / drag touch"u8);
+                DrawPrompt(_controlPrompts[5], "Brake"u8);
+                DrawPrompt(_controlPrompts[6], _drawDebug ? "Hide physics debug"u8 : "Show physics debug"u8);
+            }
         }
         ImGui.End();
+
+        if (_isMobile)
+            DrawMobileControls();
+    }
+
+    private void DrawMobileControls()
+    {
+        var displaySize = ImGui.GetIO().DisplaySize;
+        var windowSize = new Vector2f(180.0f, 80.0f);
+        ImGui.SetNextWindowPos(displaySize - windowSize - new Vector2f(8.0f, 8.0f), ImGuiCond.ImGuiCondAlways);
+        ImGui.SetNextWindowSize(windowSize, ImGuiCond.ImGuiCondAlways);
+        Input.SetScreenButton("Button0", false);
+
+        var open = true;
+        if (ImGui.Begin("##Mobile vehicle controls"u8, ref open,
+                ImGuiWindowFlags.ImGuiWindowFlagsNoDecoration |
+                ImGuiWindowFlags.ImGuiWindowFlagsNoMove |
+                ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
+        {
+            ImGui.Button("BRAKE"u8, new Vector2f(76.0f, 52.0f));
+            Input.SetScreenButton("Button0", ImGui.IsItemActive() || IsTouched());
+            ImGui.SameLine();
+            var debugClicked = ImGui.Button("DEBUG"u8, new Vector2f(76.0f, 52.0f));
+            var debugTouchDown = IsTouched();
+            _toggleDebugRequested |= (debugTouchDown || debugClicked) && !_debugTouchDown;
+            _debugTouchDown = debugTouchDown;
+        }
+        ImGui.End();
+    }
+
+    private bool IsTouched()
+    {
+        var min = ImGui.GetItemRectMin();
+        var max = ImGui.GetItemRectMax();
+        var framebufferScale = ImGui.GetIO().DisplayFramebufferScale;
+        var scaleX = framebufferScale.X > 0.0f ? framebufferScale.X : 1.0f;
+        var scaleY = framebufferScale.Y > 0.0f ? framebufferScale.Y : 1.0f;
+        for (var i = 0u; i < Input.GetNumTouches(); ++i)
+        {
+            var touch = Input.GetTouch(i);
+            if (!touch.HasValue)
+                continue;
+            var position = new Vector2f(touch.Value.Position.X / scaleX, touch.Value.Position.Y / scaleY);
+            if (position.X >= min.X && position.X <= max.X && position.Y >= min.Y && position.Y <= max.Y)
+                return true;
+        }
+        return false;
     }
 
     private static void DrawPrompt(Texture2D texture, ReadOnlySpan<byte> label)

@@ -66,6 +66,7 @@ public class KinematicCharacterDemo : Application
         base.Start();
 
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context);
+        _isMobile = ProcessUtils.IsMobile();
         _dPadAdapter = new DirectionalPadAdapter();
         _dPadAdapter.SetEnabled(true);
 
@@ -210,6 +211,7 @@ public class KinematicCharacterDemo : Application
         _character = new WeakReference<KinematicCharacter>(character);
         var moveAndOrbit = objectNode.CreateComponent<MoveAndOrbitController>();
         moveAndOrbit.LoadInputMap("Input/MoveAndOrbit.inputmap");
+        moveAndOrbit.GetInputMap()!.MapScreenButton("Crouch", "Button2");
         character.SetInputMap(moveAndOrbit.GetInputMap());
 
         var kinematicCharacter = objectNode.CreateComponent<KinematicCharacterController>();
@@ -274,8 +276,12 @@ public class KinematicCharacterDemo : Application
             }
         }
 
+        if (_toggleViewRequested)
+            _firstPerson = !_firstPerson;
+        _toggleViewRequested = false;
+
         // Toggle debug geometry with space
-        if (!ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.M))
+        if (_toggleDebugRequested || !ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.M))
         {
             _drawDebug = !_drawDebug;
             if (_drawDebug && _scene is not null)
@@ -283,6 +289,7 @@ public class KinematicCharacterDemo : Application
                 _scene.GetOrCreateComponent<DebugRenderer>();
             }
         }
+        _toggleDebugRequested = false;
     }
 
     /// <summary>Handle application post-update. Update camera position after character has moved.</summary>
@@ -353,10 +360,17 @@ public class KinematicCharacterDemo : Application
                 ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
                 ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            _controlPrompts!.Draw(true, true);
+            _controlPrompts!.Draw(true, true, _isMobile);
         }
         ImGui.End();
         ImGui.PopStyleColor();
+
+        if (_isMobile)
+        {
+            var actions = _controlPrompts!.DrawMobileControls(Input, true, true);
+            _toggleViewRequested |= actions.ViewPressed;
+            _toggleDebugRequested |= actions.DebugPressed;
+        }
     }
 
     protected override void Setup(EngineParameters parameters)
@@ -412,6 +426,9 @@ public class KinematicCharacterDemo : Application
     private bool _firstPerson;
 
     private bool _drawDebug;
+    private bool _isMobile;
+    private bool _toggleViewRequested;
+    private bool _toggleDebugRequested;
     private DirectionalPadAdapter? _dPadAdapter;
     private CharacterControlPrompts? _controlPrompts;
     private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
