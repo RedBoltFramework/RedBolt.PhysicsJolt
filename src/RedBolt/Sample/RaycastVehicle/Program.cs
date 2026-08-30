@@ -14,6 +14,7 @@ using RedBolt.Graphics;
 using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
+using RedBolt.RenderPipeline;
 using RedBolt.Resource;
 using RedBolt.Scene;
 using Widgets = RedBolt.SystemUI.Widgets;
@@ -105,7 +106,12 @@ public sealed class RaycastVehicleDemo : Application
         light.SetColor(new Color(0.92f, 0.96f, 1.0f));
         light.SetCastShadows(true);
         light.SetShadowBias(new BiasParameters(0.00025f, 0.5f));
-        light.SetShadowCascade(new CascadeParameters(12.0f, 50.0f, 150.0f, 0.0f, 0.8f));
+        void UpdateShadowCascades() => light.SetShadowCascade(ShadowCascadeEstimator.Estimate(camera,
+            new Vector2i(Graphics.Width, Graphics.Height), new RenderPipelineSettings(),
+            new ShadowCascadeEstimateSettings(150.0f) { ShadowResolution = light.GetShadowResolution() }));
+        UpdateShadowCascades();
+        SubscribeToEvent<GraphicsEvents.ScreenModeEvent>(
+            (ref GraphicsEvents.ScreenModeEvent _) => UpdateShadowCascades());
         light.SetSpecularIntensity(0.55f);
 
         // One continuous collision slab supports the entire closed course.

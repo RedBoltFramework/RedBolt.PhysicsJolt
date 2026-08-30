@@ -14,6 +14,7 @@ using RedBolt.Graphics;
 using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
+using RedBolt.RenderPipeline;
 using RedBolt.Scene;
 using Widgets = RedBolt.SystemUI.Widgets;
 
@@ -74,7 +75,6 @@ public class PhysicsSample : Application
         light.SetColor(new Color(0.92f, 0.96f, 1.0f));
         light.SetCastShadows(true);
         light.SetShadowBias(new BiasParameters(0.00025f, 0.5f));
-        light.SetShadowCascade(new CascadeParameters(12.0f, 35.0f, 80.0f, 0.0f, 0.8f));
 
         var floorNode = _scene.CreateChild("Floor");
         floorNode.SetPosition(new Vector3f(0.0f, -0.5f, 0.0f));
@@ -110,7 +110,13 @@ public class PhysicsSample : Application
 
         _cameraNode = _scene.CreateChild("Camera");
         _cameraNode.CreateComponent<FreeFlyController>().SetSpeed(20.0f);
-        _cameraNode.CreateComponent<Camera>();
+        var camera = _cameraNode.CreateComponent<Camera>();
+        void UpdateShadowCascades() => light.SetShadowCascade(ShadowCascadeEstimator.Estimate(camera,
+            new Vector2i(Graphics.Width, Graphics.Height), new RenderPipelineSettings(),
+            new ShadowCascadeEstimateSettings(80.0f) { ShadowResolution = light.GetShadowResolution() }));
+        UpdateShadowCascades();
+        SubscribeToEvent<GraphicsEvents.ScreenModeEvent>(
+            (ref GraphicsEvents.ScreenModeEvent _) => UpdateShadowCascades());
         _cameraNode.SetPosition(new Vector3f(0.0f, 5.0f, -20.0f));
         _cameraNode.LookAt(new Vector3f(0.0f, 4.0f, 0.0f));
     }

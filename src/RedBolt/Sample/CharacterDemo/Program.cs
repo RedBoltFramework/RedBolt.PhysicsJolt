@@ -14,6 +14,7 @@ using RedBolt.Graphics;
 using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
+using RedBolt.RenderPipeline;
 using RedBolt.Resource;
 using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
@@ -119,7 +120,16 @@ public class CharacterDemo : Application
         light.SetLightType(LightType.Directional);
         light.SetCastShadows(true);
         light.SetShadowBias(new BiasParameters(0.00025f, 0.5f));
-        light.SetShadowCascade(new CascadeParameters(10.0f, 50.0f, 200.0f, 0.0f, 0.8f));
+        void UpdateShadowCascades() => light.SetShadowCascade(ShadowCascadeEstimator.Estimate(camera,
+            new Vector2i(Graphics.Width, Graphics.Height), new RenderPipelineSettings(),
+            new ShadowCascadeEstimateSettings(200.0f)
+            {
+                ShadowResolution = light.GetShadowResolution(),
+                SplitLambda = 0.9f
+            }));
+        UpdateShadowCascades();
+        SubscribeToEvent<GraphicsEvents.ScreenModeEvent>(
+            (ref GraphicsEvents.ScreenModeEvent _) => UpdateShadowCascades());
         light.SetSpecularIntensity(0.5f);
 
         // Create the floor object
