@@ -96,6 +96,22 @@ public class CharacterDemo : Application
         _scene.CreateComponent<Octree>();
         _scene.CreateComponent<PhysicsWorld>();
 
+        var renderPipeline = _scene.CreateComponent<RenderPipeline>();
+        var renderPipelineSettings = renderPipeline.Settings;
+        var sceneProcessorSettings = renderPipelineSettings.SceneProcessor;
+        sceneProcessorSettings.PcfKernelSize = 2;
+        var isMobile = ProcessUtils.IsMobile();
+        if (!isMobile)
+            sceneProcessorSettings.DirectionalShadowSize = 2048;
+        renderPipelineSettings.SceneProcessor = sceneProcessorSettings;
+        if (!isMobile)
+        {
+            var shadowMapAllocatorSettings = renderPipelineSettings.ShadowMapAllocator;
+            shadowMapAllocatorSettings.ShadowAtlasPageSize = 4096;
+            renderPipelineSettings.ShadowMapAllocator = shadowMapAllocatorSettings;
+        }
+        renderPipeline.SetSettings(renderPipelineSettings);
+
         // Create camera and define viewport. We will be doing load / save, so it's convenient to create the camera outside the scene,
         // so that it won't be destroyed and recreated, and we don't have to redefine the viewport on load
         _cameraNode = _scene.CreateChild("Camera");
@@ -121,7 +137,7 @@ public class CharacterDemo : Application
         light.SetCastShadows(true);
         light.SetShadowBias(new BiasParameters(0.00025f, 0.5f));
         void UpdateShadowCascades() => light.SetShadowCascade(ShadowCascadeEstimator.Estimate(camera,
-            new Vector2i(Graphics.Width, Graphics.Height), new RenderPipelineSettings(),
+            new Vector2i(Graphics.Width, Graphics.Height), renderPipeline.Settings,
             new ShadowCascadeEstimateSettings(200.0f)
             {
                 ShadowResolution = light.GetShadowResolution(),
