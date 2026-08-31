@@ -16,6 +16,7 @@ using RedBolt.Math;
 using RedBolt.PhysicsJolt;
 using RedBolt.RenderPipeline;
 using RedBolt.Resource;
+using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
 using Widgets = RedBolt.SystemUI.Widgets;
 
@@ -47,10 +48,9 @@ public sealed class RaycastVehicleDemo : Application
     private Vehicle2? _vehicle;
     private Viewport? _viewport;
     private bool _drawDebug;
-    private bool _isMobile;
     private bool _toggleDebugRequested;
-    private bool _debugTouchDown;
     private Texture2D[]? _controlPrompts;
+    private OnScreenControls? _onScreenControls;
     private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
 
     protected override void Setup(EngineParameters parameters)
@@ -72,7 +72,6 @@ public sealed class RaycastVehicleDemo : Application
     {
         base.Start();
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context.Instance);
-        _isMobile = ProcessUtils.IsMobile();
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
 
         CreateScene();
@@ -225,8 +224,13 @@ public sealed class RaycastVehicleDemo : Application
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_d.png"),
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_move.png"),
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_f.png"),
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_space.png")
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_space.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/generic_joystick.png"),
+            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
         ];
+        _onScreenControls = new OnScreenControls(Input,
+            (OnScreenControl.Brake, "Button0", "BRAKE"),
+            (OnScreenControl.Debug, "Debug", "DEBUG"));
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>(
             (ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
     }
@@ -296,76 +300,32 @@ public sealed class RaycastVehicleDemo : Application
         var windowOpen = true;
         ImGui.SetNextWindowPos(new Vector2f(10.0f, 10.0f), ImGuiCond.ImGuiCondAlways);
         if (ImGui.Begin("Raycast Vehicle"u8, ref windowOpen,
-                ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
+                ImGuiWindowFlags.ImGuiWindowFlagsAlwaysAutoResize |
+                ImGuiWindowFlags.ImGuiWindowFlagsNoCollapse |
                 ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            if (_isMobile)
+            if (_onScreenControls!.IsVisible)
             {
-                ImGui.TextUnformatted("Drag left half to drive"u8);
-                ImGui.TextUnformatted("Drag right half to look"u8);
-                ImGui.TextUnformatted("Use the action buttons below"u8);
+                DrawPrompt(_controlPrompts![7], "Drag left side to drive"u8);
+                DrawPrompt(_controlPrompts[8], "Drag right side to rotate camera"u8);
+                var pressed = _onScreenControls.Draw(OnScreenControl.Brake | OnScreenControl.Debug, true);
+                _toggleDebugRequested |= (pressed & OnScreenControl.Debug) != 0;
             }
             else
             {
+                _onScreenControls.Draw(OnScreenControl.Brake | OnScreenControl.Debug, true);
                 for (var i = 0; i < 3; ++i)
                 {
                     ImGui.Image(_controlPrompts![i], PromptIconSize);
                     ImGui.SameLine();
                 }
                 DrawPrompt(_controlPrompts![3], "Drive"u8);
-                DrawPrompt(_controlPrompts[4], "Rotate camera / drag touch"u8);
+                DrawPrompt(_controlPrompts[4], "Rotate camera"u8);
                 DrawPrompt(_controlPrompts[5], "Brake"u8);
                 DrawPrompt(_controlPrompts[6], _drawDebug ? "Hide physics debug"u8 : "Show physics debug"u8);
             }
         }
         ImGui.End();
-
-        if (_isMobile)
-            DrawMobileControls();
-    }
-
-    private void DrawMobileControls()
-    {
-        var displaySize = ImGui.GetIO().DisplaySize;
-        var windowSize = new Vector2f(180.0f, 80.0f);
-        ImGui.SetNextWindowPos(displaySize - windowSize - new Vector2f(8.0f, 8.0f), ImGuiCond.ImGuiCondAlways);
-        ImGui.SetNextWindowSize(windowSize, ImGuiCond.ImGuiCondAlways);
-        Input.SetScreenButton("Button0", false);
-
-        var open = true;
-        if (ImGui.Begin("##Mobile vehicle controls"u8, ref open,
-                ImGuiWindowFlags.ImGuiWindowFlagsNoDecoration |
-                ImGuiWindowFlags.ImGuiWindowFlagsNoMove |
-                ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
-        {
-            ImGui.Button("BRAKE"u8, new Vector2f(76.0f, 52.0f));
-            Input.SetScreenButton("Button0", ImGui.IsItemActive() || IsTouched());
-            ImGui.SameLine();
-            var debugClicked = ImGui.Button("DEBUG"u8, new Vector2f(76.0f, 52.0f));
-            var debugTouchDown = IsTouched();
-            _toggleDebugRequested |= (debugTouchDown || debugClicked) && !_debugTouchDown;
-            _debugTouchDown = debugTouchDown;
-        }
-        ImGui.End();
-    }
-
-    private bool IsTouched()
-    {
-        var min = ImGui.GetItemRectMin();
-        var max = ImGui.GetItemRectMax();
-        var framebufferScale = ImGui.GetIO().DisplayFramebufferScale;
-        var scaleX = framebufferScale.X > 0.0f ? framebufferScale.X : 1.0f;
-        var scaleY = framebufferScale.Y > 0.0f ? framebufferScale.Y : 1.0f;
-        for (var i = 0u; i < Input.GetNumTouches(); ++i)
-        {
-            var touch = Input.GetTouch(i);
-            if (!touch.HasValue)
-                continue;
-            var position = new Vector2f(touch.Value.Position.X / scaleX, touch.Value.Position.Y / scaleY);
-            if (position.X >= min.X && position.X <= max.X && position.Y >= min.Y && position.Y <= max.Y)
-                return true;
-        }
-        return false;
     }
 
     private static void DrawPrompt(Texture2D texture, ReadOnlySpan<byte> label)

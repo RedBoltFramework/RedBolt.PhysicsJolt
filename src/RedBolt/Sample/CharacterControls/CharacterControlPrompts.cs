@@ -15,7 +15,7 @@ using Widgets = RedBolt.SystemUI.Widgets;
 
 internal sealed class CharacterControlPrompts
 {
-    public CharacterControlPrompts(ResourceCache resources)
+    public CharacterControlPrompts(ResourceCache resources, Input input)
     {
         _textures =
         [
@@ -28,19 +28,36 @@ internal sealed class CharacterControlPrompts
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_f.png"),
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_shift.png"),
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_m.png"),
-            resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_escape.png")
+            resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_escape.png"),
+            resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/generic_joystick.png"),
+            resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
         ];
+        _onScreenControls = new OnScreenControls(input,
+            (OnScreenControl.Jump, "Button1", "JUMP"),
+            (OnScreenControl.Crouch, "Button2", "CROUCH"),
+            (OnScreenControl.View, "View", "VIEW"),
+            (OnScreenControl.Debug, "Debug", "DEBUG"));
     }
 
-    public void Draw(bool showCrouch, bool showDebug, bool isMobile)
+    public ControlActions Draw(bool showCrouch, bool showDebug)
     {
-        if (isMobile)
+        var visibleControls = OnScreenControl.Jump | OnScreenControl.View;
+        if (showCrouch)
+            visibleControls |= OnScreenControl.Crouch;
+        if (showDebug)
+            visibleControls |= OnScreenControl.Debug;
+
+        if (_onScreenControls.IsVisible)
         {
-            ImGui.TextUnformatted("Drag left half to move"u8);
-            ImGui.TextUnformatted("Drag right half to look"u8);
-            ImGui.TextUnformatted("Use the action buttons below"u8);
-            return;
+            DrawPrompt(_textures[10], "Drag left side to move"u8);
+            DrawPrompt(_textures[11], "Drag right side to rotate camera"u8);
+            var pressed = _onScreenControls.Draw(visibleControls, true);
+            return new ControlActions(
+                (pressed & OnScreenControl.View) != 0,
+                (pressed & OnScreenControl.Debug) != 0);
         }
+
+        _onScreenControls.Draw(visibleControls, true);
 
         for (var i = 0; i < 3; ++i)
         {
@@ -48,7 +65,7 @@ internal sealed class CharacterControlPrompts
             ImGui.SameLine();
         }
         DrawPrompt(_textures[3], "Move"u8);
-        DrawPrompt(_textures[4], "Hold / drag touch to rotate camera"u8);
+        DrawPrompt(_textures[4], "Hold right mouse to rotate camera"u8);
         DrawPrompt(_textures[5], "Jump"u8);
         if (showCrouch)
             DrawPrompt(_textures[7], "Crouch"u8);
@@ -56,55 +73,7 @@ internal sealed class CharacterControlPrompts
         if (showDebug)
             DrawPrompt(_textures[8], "Toggle physics debug geometry"u8);
         DrawPrompt(_textures[9], "Exit"u8);
-    }
-
-    public MobileControlActions DrawMobileControls(Input input, bool showCrouch, bool showDebug)
-    {
-        var displaySize = ImGui.GetIO().DisplaySize;
-        const int columns = 2;
-        var rows = showCrouch || showDebug ? 2 : 1;
-        var windowSize = new Vector2f(columns * MobileButtonSize.X + 28.0f, rows * MobileButtonSize.Y + 28.0f);
-        ImGui.SetNextWindowPos(displaySize - windowSize - new Vector2f(8.0f, 8.0f), ImGuiCond.ImGuiCondAlways);
-        ImGui.SetNextWindowSize(windowSize, ImGuiCond.ImGuiCondAlways);
-
-        var open = true;
-        var viewPressed = false;
-        var debugPressed = false;
-        input.SetScreenButton("Button1", false);
-        input.SetScreenButton("Button2", false);
-        if (ImGui.Begin("##Mobile character controls"u8, ref open,
-                ImGuiWindowFlags.ImGuiWindowFlagsNoDecoration |
-                ImGuiWindowFlags.ImGuiWindowFlagsNoMove |
-                ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
-        {
-            ImGui.Button("JUMP"u8, MobileButtonSize);
-            input.SetScreenButton("Button1", ImGui.IsItemActive() || IsTouched(input));
-            ImGui.SameLine();
-            var viewClicked = ImGui.Button("VIEW"u8, MobileButtonSize);
-            var viewTouchDown = IsTouched(input);
-            viewPressed = (viewTouchDown || viewClicked) && !_viewTouchDown;
-            _viewTouchDown = viewTouchDown;
-
-            if (showCrouch)
-            {
-                ImGui.Button("CROUCH"u8, MobileButtonSize);
-                input.SetScreenButton("Button2", ImGui.IsItemActive() || IsTouched(input));
-            }
-
-            if (showDebug)
-            {
-                if (showCrouch)
-                    ImGui.SameLine();
-                var debugClicked = ImGui.Button("DEBUG"u8, MobileButtonSize);
-                var debugTouchDown = IsTouched(input);
-                debugPressed = (debugTouchDown || debugClicked) && !_debugTouchDown;
-                _debugTouchDown = debugTouchDown;
-            }
-            else
-                _debugTouchDown = false;
-        }
-        ImGui.End();
-        return new MobileControlActions(viewPressed, debugPressed);
+        return default;
     }
 
     private static void DrawPrompt(Texture2D texture, ReadOnlySpan<byte> label)
@@ -115,30 +84,9 @@ internal sealed class CharacterControlPrompts
         ImGui.TextUnformatted(label);
     }
 
-    private static bool IsTouched(Input input)
-    {
-        var min = ImGui.GetItemRectMin();
-        var max = ImGui.GetItemRectMax();
-        var framebufferScale = ImGui.GetIO().DisplayFramebufferScale;
-        var scaleX = framebufferScale.X > 0.0f ? framebufferScale.X : 1.0f;
-        var scaleY = framebufferScale.Y > 0.0f ? framebufferScale.Y : 1.0f;
-        for (var i = 0u; i < input.GetNumTouches(); ++i)
-        {
-            var touch = input.GetTouch(i);
-            if (!touch.HasValue)
-                continue;
-            var position = new Vector2f(touch.Value.Position.X / scaleX, touch.Value.Position.Y / scaleY);
-            if (position.X >= min.X && position.X <= max.X && position.Y >= min.Y && position.Y <= max.Y)
-                return true;
-        }
-        return false;
-    }
-
     private static readonly Vector2f IconSize = new(24.0f, 24.0f);
-    private static readonly Vector2f MobileButtonSize = new(76.0f, 52.0f);
     private readonly Texture2D[] _textures;
-    private bool _viewTouchDown;
-    private bool _debugTouchDown;
+    private readonly OnScreenControls _onScreenControls;
 }
 
-internal readonly record struct MobileControlActions(bool ViewPressed, bool DebugPressed);
+internal readonly record struct ControlActions(bool ViewPressed, bool DebugPressed);

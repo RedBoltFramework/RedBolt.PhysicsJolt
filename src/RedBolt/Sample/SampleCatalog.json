@@ -23,11 +23,11 @@
     "CharacterControls/**/*.cs"
   ],
   "samples": [
-    { "id": "advanced-networking", "name": "Advanced Networking", "applicationType": "RedBolt.Sample.AdvancedNetworking.AdvancedNetworking", "source": "AdvancedNetworking", "mobileHelp": "Drag to look and use the direction pad to move after joining a server.", "mobileMovement": "wasd", "mobileControls": [{"label": "Jump", "key": "Space"}] },
-    { "id": "character-demo", "name": "Character Demo", "applicationType": "RedBolt.Sample.CharacterDemo.CharacterDemo", "source": "CharacterDemo", "mobileHelp": "Drag the left half to move and the right half to look. Use the in-sample action buttons." },
-    { "id": "kinematic-character", "name": "Kinematic Character", "applicationType": "RedBolt.Sample.KinematicCharacter.KinematicCharacterDemo", "source": "KinematicCharacter", "mobileHelp": "Drag the left half to move and the right half to look. Use the in-sample action buttons." },
-    { "id": "physics", "name": "Physics", "applicationType": "RedBolt.Sample.Physics.PhysicsSample", "source": "Physics", "mobileHelp": "Drag to look, use the direction pad to move, and throw boxes with the action button.", "mobileMovement": "wasd", "mobileControls": [{"label": "Throw", "mouseButton": "Left"}] },
-    { "id": "raycast-vehicle", "name": "Raycast Vehicle", "applicationType": "RedBolt.Sample.RaycastVehicle.RaycastVehicleDemo", "source": "RaycastVehicle", "mobileHelp": "Drag the left half to steer and the right half to orbit. Use the in-sample action buttons." },
-    { "id": "scene-replication", "name": "Scene Replication", "applicationType": "RedBolt.Sample.SceneReplication.SceneReplication", "source": "SceneReplication", "mobileHelp": "Use the direction pad to move. Hold Look while dragging to rotate the camera.", "mobileMovement": "wasd", "mobileControls": [{"label": "Look", "mouseButton": "Right"}] }
+    { "id": "advanced-networking", "name": "Advanced Networking", "applicationType": "RedBolt.Sample.AdvancedNetworking.AdvancedNetworking", "source": "AdvancedNetworking" },
+    { "id": "character-demo", "name": "Character Demo", "applicationType": "RedBolt.Sample.CharacterDemo.CharacterDemo", "source": "CharacterDemo" },
+    { "id": "kinematic-character", "name": "Kinematic Character", "applicationType": "RedBolt.Sample.KinematicCharacter.KinematicCharacterDemo", "source": "KinematicCharacter" },
+    { "id": "physics", "name": "Physics", "applicationType": "RedBolt.Sample.Physics.PhysicsSample", "source": "Physics" },
+    { "id": "raycast-vehicle", "name": "Raycast Vehicle", "applicationType": "RedBolt.Sample.RaycastVehicle.RaycastVehicleDemo", "source": "RaycastVehicle" },
+    { "id": "scene-replication", "name": "Scene Replication", "applicationType": "RedBolt.Sample.SceneReplication.SceneReplication", "source": "SceneReplication" }
   ]
 }

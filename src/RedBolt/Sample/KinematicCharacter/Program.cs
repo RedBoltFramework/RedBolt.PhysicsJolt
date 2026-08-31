@@ -66,7 +66,6 @@ public class KinematicCharacterDemo : Application
         base.Start();
 
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context);
-        _isMobile = ProcessUtils.IsMobile();
         _dPadAdapter = new DirectionalPadAdapter();
         _dPadAdapter.SetEnabled(true);
 
@@ -225,7 +224,7 @@ public class KinematicCharacterDemo : Application
     private void CreateInstructions()
     {
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
-        _controlPrompts = new CharacterControlPrompts(Resources);
+        _controlPrompts = new CharacterControlPrompts(Resources, Input);
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>(
             (ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
 
@@ -357,20 +356,16 @@ public class KinematicCharacterDemo : Application
         ImGui.SetNextWindowPos(new Vector2f(10.0f, 10.0f), ImGuiCond.ImGuiCondAlways);
         ImGui.PushStyleColor(ImGuiCol.ImGuiColWindowBg, HudBackground);
         if (ImGui.Begin("Kinematic Character"u8, ref windowOpen,
-                ImGuiWindowFlags.ImGuiWindowFlagsNoResize |
+                ImGuiWindowFlags.ImGuiWindowFlagsAlwaysAutoResize |
+                ImGuiWindowFlags.ImGuiWindowFlagsNoCollapse |
                 ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings))
         {
-            _controlPrompts!.Draw(true, true, _isMobile);
-        }
-        ImGui.End();
-        ImGui.PopStyleColor();
-
-        if (_isMobile)
-        {
-            var actions = _controlPrompts!.DrawMobileControls(Input, true, true);
+            var actions = _controlPrompts!.Draw(true, true);
             _toggleViewRequested |= actions.ViewPressed;
             _toggleDebugRequested |= actions.DebugPressed;
         }
+        ImGui.End();
+        ImGui.PopStyleColor();
     }
 
     protected override void Setup(EngineParameters parameters)
@@ -426,7 +421,6 @@ public class KinematicCharacterDemo : Application
     private bool _firstPerson;
 
     private bool _drawDebug;
-    private bool _isMobile;
     private bool _toggleViewRequested;
     private bool _toggleDebugRequested;
     private DirectionalPadAdapter? _dPadAdapter;
