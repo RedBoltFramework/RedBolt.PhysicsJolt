@@ -247,6 +247,13 @@ public sealed class AdvancedNetworking : Application
         Context.RegisterAssembly(typeof(AdvancedNetworkingPlayer).Assembly);
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
         _controlPrompts = LoadControlPrompts();
+        _inputMap = SampleInputMaps.Create(movement: true);
+        SampleInputMaps.MapButton(_inputMap, "Jump", Scancode.Space, ControllerButton.A);
+        _inputMap.MapMouseButton("Fire", MouseButton.Left);
+        _inputMap.MapControllerButton("Fire", ControllerButton.X);
+        _onScreenControls = new OnScreenControls(_inputMap,
+            (OnScreenControl.Jump, "Jump", "JUMP"),
+            (OnScreenControl.Fire, "Fire", "FIRE"));
 
         _addressBuffer = Marshal.AllocHGlobal(AddressBufferSize);
         SetAddressBuffer(string.IsNullOrWhiteSpace(_connectOnLaunch) ? "localhost" : _connectOnLaunch);
@@ -265,7 +272,7 @@ public sealed class AdvancedNetworking : Application
 
     protected override void Update(float timeStep)
     {
-        if (Input.ExitRequested || Input.GetKeyPress(Key.Escape))
+        if (Input.ExitRequested || _inputMap!.EvaluatePressed("Exit"))
         {
             Exit();
             return;
@@ -283,6 +290,10 @@ public sealed class AdvancedNetworking : Application
 
     protected override void Stop()
     {
+        _onScreenControls?.Dispose();
+        _onScreenControls = null;
+        _inputMap?.Dispose();
+        _inputMap = null;
         StopNetworking();
         _server?.Dispose();
         _server = null;
@@ -371,6 +382,7 @@ public sealed class AdvancedNetworking : Application
 
     private void DrawInterface()
     {
+        _onScreenControls?.Draw(OnScreenControl.Jump | OnScreenControl.Fire, true);
         var connected = _clientConnection?.IsConnected == true;
         var listening = _server?.IsListening == true;
         var hasControls = GetClientObject() is not null;
@@ -645,14 +657,15 @@ public sealed class AdvancedNetworking : Application
         var direction = Vector3f.Zero;
         if (!ImGui.GetIO().WantCaptureKeyboard)
         {
-            if (Input.GetKeyDown(Key.W) || (_autoMovement && _autoMovementPhase == 3)) direction += rotation * Vector3f.Forward;
-            if (Input.GetKeyDown(Key.S) || (_autoMovement && _autoMovementPhase == 1)) direction += rotation * Vector3f.Back;
-            if (Input.GetKeyDown(Key.A) || (_autoMovement && _autoMovementPhase == 2)) direction += rotation * Vector3f.Left;
-            if (Input.GetKeyDown(Key.D) || (_autoMovement && _autoMovementPhase == 0)) direction += rotation * Vector3f.Right;
+            if (_inputMap!.Evaluate("Forward") != 0.0f || (_autoMovement && _autoMovementPhase == 3)) direction += rotation * Vector3f.Forward;
+            if (_inputMap.Evaluate("Back") != 0.0f || (_autoMovement && _autoMovementPhase == 1)) direction += rotation * Vector3f.Back;
+            if (_inputMap.Evaluate("Left") != 0.0f || (_autoMovement && _autoMovementPhase == 2)) direction += rotation * Vector3f.Left;
+            if (_inputMap.Evaluate("Right") != 0.0f || (_autoMovement && _autoMovementPhase == 0)) direction += rotation * Vector3f.Right;
         }
         var controller = clientObject.GetComponent<PredictedKinematicController>();
         controller?.SetWalkVelocity(direction.NormalizedOrDefault() * WalkVelocity);
-        if (!ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyDown(Key.Space))
+        if ((Input.ActiveInputDevice == InputDeviceType.Touch
+                || !ImGui.GetIO().WantCaptureKeyboard) && _inputMap!.Evaluate("Jump") != 0.0f)
             controller?.SetJump();
 
         _cameraNode.SetPosition(clientObject.GetPosition()
@@ -662,7 +675,9 @@ public sealed class AdvancedNetworking : Application
         var automaticClick = _autoClick && _autoClickTime >= 0.25f;
         if (automaticClick)
             _autoClickTime %= 0.25f;
-        if ((!ImGui.GetIO().WantCaptureMouse && Input.GetMouseButtonPress(MouseButton.Left)) || automaticClick)
+        var touchInput = Input.ActiveInputDevice == InputDeviceType.Touch;
+        if (((touchInput || !ImGui.GetIO().WantCaptureMouse && !ImGui.GetIO().WantCaptureKeyboard)
+                && _inputMap!.EvaluatePressed("Fire")) || automaticClick)
         {
             var viewport = Renderer.GetViewport();
             var mousePosition = Input.GetMousePosition();
@@ -676,10 +691,10 @@ public sealed class AdvancedNetworking : Application
         if (_server?.IsListening != true || ImGui.GetIO().WantCaptureKeyboard)
             return;
         var direction = Vector3f.Zero;
-        if (Input.GetKeyDown(Key.W)) direction += Vector3f.Forward;
-        if (Input.GetKeyDown(Key.S)) direction += Vector3f.Back;
-        if (Input.GetKeyDown(Key.A)) direction += Vector3f.Left;
-        if (Input.GetKeyDown(Key.D)) direction += Vector3f.Right;
+        if (_inputMap!.Evaluate("Forward") != 0.0f) direction += Vector3f.Forward;
+        if (_inputMap.Evaluate("Back") != 0.0f) direction += Vector3f.Back;
+        if (_inputMap.Evaluate("Left") != 0.0f) direction += Vector3f.Left;
+        if (_inputMap.Evaluate("Right") != 0.0f) direction += Vector3f.Right;
         _cameraNode!.SetPosition(_cameraNode.GetPosition()
             + _cameraNode.GetRotation() * direction.NormalizedOrDefault() * (20.0f * timeStep));
     }
@@ -895,6 +910,8 @@ public sealed class AdvancedNetworking : Application
     private bool _startServerOnLaunch;
     private string _connectOnLaunch = string.Empty;
     private Texture2D[]? _controlPrompts;
+    private OnScreenControls? _onScreenControls;
+    private InputMap? _inputMap;
     private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
     private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
     private static readonly Vector4f PanelBackground = new(0.075f, 0.09f, 0.125f, 0.94f);

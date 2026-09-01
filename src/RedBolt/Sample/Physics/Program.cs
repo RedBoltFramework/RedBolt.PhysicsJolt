@@ -15,6 +15,7 @@ using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.PhysicsJolt;
 using RedBolt.RenderPipeline;
+using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
 using Widgets = RedBolt.SystemUI.Widgets;
 
@@ -136,6 +137,11 @@ public class PhysicsSample : Application
     {
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>((ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
+        _inputMap = SampleInputMaps.Create();
+        _inputMap.MapMouseButton("Throw", MouseButton.Left);
+        _inputMap.MapControllerButton("Throw", ControllerButton.A);
+        _onScreenControls = new OnScreenControls(_inputMap,
+            (OnScreenControl.Fire, "Throw", "THROW"));
 
         _controlPrompts =
         [
@@ -166,18 +172,22 @@ public class PhysicsSample : Application
 
     protected override void Update(float timeStep)
     {
-        if (Input.ExitRequested || Input.GetKeyPress(Key.Escape))
+        if (Input.ExitRequested || _inputMap!.EvaluatePressed("Exit"))
         {
             Exit();
             return;
         }
 
-        if (Input.GetMouseButtonPress(MouseButton.Left))
+        if (_inputMap.EvaluatePressed("Throw"))
             SpawnObject();
     }
 
     protected override void Stop()
     {
+        _onScreenControls?.Dispose();
+        _onScreenControls = null;
+        _inputMap?.Dispose();
+        _inputMap = null;
         Renderer.SetNumViewports(0);
         _cameraNode = null;
         _scene?.Dispose();
@@ -187,6 +197,7 @@ public class PhysicsSample : Application
 
     private void DrawInstructions()
     {
+        _onScreenControls?.Draw(OnScreenControl.Fire, showJoystick: false);
         var windowOpen = true;
         ImGui.SetNextWindowPos(new Vector2f(10.0f, 10.0f), ImGuiCond.ImGuiCondAlways);
         if (ImGui.Begin("Physics"u8, ref windowOpen,
@@ -241,5 +252,7 @@ public class PhysicsSample : Application
     private Scene? _scene;
     private Node? _cameraNode;
     private Texture2D[]? _controlPrompts;
+    private OnScreenControls? _onScreenControls;
+    private InputMap? _inputMap;
     private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
 }

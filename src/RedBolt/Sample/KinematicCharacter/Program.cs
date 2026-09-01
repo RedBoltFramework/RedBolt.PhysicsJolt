@@ -210,8 +210,13 @@ public class KinematicCharacterDemo : Application
         _character = new WeakReference<KinematicCharacter>(character);
         var moveAndOrbit = objectNode.CreateComponent<MoveAndOrbitController>();
         moveAndOrbit.LoadInputMap("Input/MoveAndOrbit.inputmap");
-        moveAndOrbit.GetInputMap()!.MapScreenButton("Crouch", "Button2");
-        character.SetInputMap(moveAndOrbit.GetInputMap());
+        _inputMap = moveAndOrbit.GetInputMap()!;
+        SampleInputMaps.MapDPad(_inputMap);
+        SampleInputMaps.MapButton(_inputMap, "Exit", Scancode.Escape, ControllerButton.Back);
+        SampleInputMaps.MapButton(_inputMap, "View", Scancode.F, ControllerButton.X);
+        SampleInputMaps.MapButton(_inputMap, "Debug", Scancode.M, ControllerButton.Y);
+        SampleInputMaps.MapButton(_inputMap, "Crouch", Scancode.LeftShift, ControllerButton.B);
+        character.SetInputMap(_inputMap);
 
         var kinematicCharacter = objectNode.CreateComponent<KinematicCharacterController>();
         _kinematicCharacter = new WeakReference<KinematicCharacterController>(kinematicCharacter);
@@ -224,7 +229,7 @@ public class KinematicCharacterDemo : Application
     private void CreateInstructions()
     {
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
-        _controlPrompts = new CharacterControlPrompts(Resources, Input);
+        _controlPrompts = new CharacterControlPrompts(Resources, _inputMap!);
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>(
             (ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
 
@@ -251,7 +256,7 @@ public class KinematicCharacterDemo : Application
     /// <summary>Handle application update. Set controls to character.</summary>
     protected override void Update(float timeStep)
     {
-        if (Input.ExitRequested || Input.GetKeyPress(Key.Escape))
+        if (Input.ExitRequested || _inputMap!.EvaluatePressed("Exit"))
         {
             Exit();
             return;
@@ -270,7 +275,7 @@ public class KinematicCharacterDemo : Application
                 character.Node.SetRotation(new Quaternion(character.GetYaw(), Vector3f.Up));
 
                 // Switch between 1st and 3rd person
-                if (Input.GetKeyPress(Key.F))
+                if (_inputMap.EvaluatePressed("View"))
                     _firstPerson = !_firstPerson;
             }
         }
@@ -280,7 +285,7 @@ public class KinematicCharacterDemo : Application
         _toggleViewRequested = false;
 
         // Toggle debug geometry with space
-        if (_toggleDebugRequested || !ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.M))
+        if (_toggleDebugRequested || !ImGui.GetIO().WantCaptureKeyboard && _inputMap.EvaluatePressed("Debug"))
         {
             _drawDebug = !_drawDebug;
             if (_drawDebug && _scene is not null)
@@ -400,10 +405,13 @@ public class KinematicCharacterDemo : Application
 
     private void Cleanup()
     {
+        _controlPrompts?.Dispose();
+        _controlPrompts = null;
         if (_scene is not null)
             Renderer.SetNumViewports(0);
         _kinematicCharacter = null;
         _character = null;
+        _inputMap = null;
         _cameraNode = null;
         _viewport?.Dispose();
         _viewport = null;
@@ -425,5 +433,6 @@ public class KinematicCharacterDemo : Application
     private bool _toggleDebugRequested;
     private DirectionalPadAdapter? _dPadAdapter;
     private CharacterControlPrompts? _controlPrompts;
+    private InputMap? _inputMap;
     private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
 }

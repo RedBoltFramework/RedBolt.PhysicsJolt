@@ -22,6 +22,7 @@ using RedBolt.Network;
 using RedBolt.PhysicsJolt;
 using RedBolt.Replica;
 using RedBolt.Resource;
+using RedBolt.Sample.CharacterControls;
 using RedBolt.Scene;
 using Widgets = RedBolt.SystemUI.Widgets;
 
@@ -153,6 +154,8 @@ public sealed class SceneReplication : Application
         RedBolt.PhysicsJolt.Physics.RegisterPhysicsLibrary(Context);
         Context.RegisterAssembly(typeof(SceneReplicationPlayer).Assembly);
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
+        _inputMap = SampleInputMaps.Create(movement: true);
+        _onScreenControls = new OnScreenControls(_inputMap);
         _controlPrompts = LoadControlPrompts();
         _addressBuffer = Marshal.AllocHGlobal(AddressBufferSize);
         Marshal.WriteByte(_addressBuffer, 0, 0);
@@ -181,7 +184,7 @@ public sealed class SceneReplication : Application
 
     protected override void Update(float timeStep)
     {
-        if (Input.ExitRequested || Input.GetKeyPress(Key.Escape))
+        if (Input.ExitRequested || _inputMap!.EvaluatePressed("Exit"))
         {
             Exit();
             return;
@@ -197,6 +200,10 @@ public sealed class SceneReplication : Application
 
     protected override void Stop()
     {
+        _onScreenControls?.Dispose();
+        _onScreenControls = null;
+        _inputMap?.Dispose();
+        _inputMap = null;
         Disconnect();
         _server?.Dispose();
         _server = null;
@@ -287,6 +294,7 @@ public sealed class SceneReplication : Application
         var clientConnected = _clientConnection?.IsConnected == true;
         var serverRunning = _server?.IsListening == true;
         var hasControls = GetPlayerObject() is not null;
+        _onScreenControls?.Draw(OnScreenControl.None, showJoystick: hasControls);
         var windowHeight = hasControls ? 430.0f : clientConnected || serverRunning ? 315.0f : 350.0f;
         ImGui.SetNextWindowPos(new Vector2f(18.0f, 18.0f), ImGuiCond.ImGuiCondAlways);
         ImGui.SetNextWindowSize(new Vector2f(420.0f, windowHeight), ImGuiCond.ImGuiCondAlways);
@@ -438,10 +446,10 @@ public sealed class SceneReplication : Application
                 var controls = new PlayerControls { Yaw = _yaw };
                 if (!ImGui.GetIO().WantCaptureKeyboard)
                 {
-                    if (Input.GetKeyDown(Key.W)) controls.Buttons |= ControlForward;
-                    if (Input.GetKeyDown(Key.S)) controls.Buttons |= ControlBack;
-                    if (Input.GetKeyDown(Key.A)) controls.Buttons |= ControlLeft;
-                    if (Input.GetKeyDown(Key.D)) controls.Buttons |= ControlRight;
+                    if (_inputMap!.Evaluate("Forward") != 0.0f) controls.Buttons |= ControlForward;
+                    if (_inputMap.Evaluate("Back") != 0.0f) controls.Buttons |= ControlBack;
+                    if (_inputMap.Evaluate("Left") != 0.0f) controls.Buttons |= ControlLeft;
+                    if (_inputMap.Evaluate("Right") != 0.0f) controls.Buttons |= ControlRight;
                 }
                 player.Controls = controls;
             }
@@ -590,6 +598,8 @@ public sealed class SceneReplication : Application
     private bool _startServerOnLaunch;
     private string _connectOnLaunch = string.Empty;
     private Texture2D[]? _controlPrompts;
+    private OnScreenControls? _onScreenControls;
+    private InputMap? _inputMap;
     private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
     private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
     private static readonly Vector4f PanelBackground = new(0.075f, 0.09f, 0.125f, 0.94f);

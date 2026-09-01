@@ -13,9 +13,9 @@ using RedBolt.Math;
 using RedBolt.Resource;
 using Widgets = RedBolt.SystemUI.Widgets;
 
-internal sealed class CharacterControlPrompts
+internal sealed class CharacterControlPrompts : IDisposable
 {
-    public CharacterControlPrompts(ResourceCache resources, Input input)
+    public CharacterControlPrompts(ResourceCache resources, InputMap inputMap)
     {
         _textures =
         [
@@ -32,9 +32,9 @@ internal sealed class CharacterControlPrompts
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/generic_joystick.png"),
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
         ];
-        _onScreenControls = new OnScreenControls(input,
-            (OnScreenControl.Jump, "Button1", "JUMP"),
-            (OnScreenControl.Crouch, "Button2", "CROUCH"),
+        _onScreenControls = new OnScreenControls(inputMap,
+            (OnScreenControl.Jump, "Jump", "JUMP"),
+            (OnScreenControl.Crouch, "Crouch", "CROUCH"),
             (OnScreenControl.View, "View", "VIEW"),
             (OnScreenControl.Debug, "Debug", "DEBUG"));
     }
@@ -82,6 +82,11 @@ internal sealed class CharacterControlPrompts
         ImGui.SameLine();
         Widgets.AlignTextToLastItem();
         ImGui.TextUnformatted(label);
+    }
+
+    public void Dispose()
+    {
+        _onScreenControls.Dispose();
     }
 
     private static readonly Vector2f IconSize = new(24.0f, 24.0f);

@@ -5,12 +5,7 @@
 namespace RedBolt.Sample.CharacterControls;
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 
-using RedBolt.Bindings.DearImGui;
-using RedBolt.Bindings.Sdl;
-using RedBolt.Core;
 using RedBolt.Input;
 using RedBolt.Math;
 
@@ -22,284 +17,111 @@ internal enum OnScreenControl
     Crouch = 1 << 1,
     View = 1 << 2,
     Debug = 1 << 3,
-    Brake = 1 << 4
+    Brake = 1 << 4,
+    Fire = 1 << 5
 }
 
-internal sealed class OnScreenControls : RedObject
+/// <summary>
+/// Contextual touch controls shared by the Jolt samples. The input map is borrowed and remains owned by
+/// the sample or scene component that created it.
+/// </summary>
+internal sealed class OnScreenControls : IDisposable
 {
-    private sealed class Button
-    {
-        public Button(OnScreenControl control, string elementName, string label)
-        {
-            Control = control;
-            ElementName = elementName;
-            Label = Encoding.UTF8.GetBytes(label);
-        }
+    private readonly record struct Button(OnScreenControl Control, string Name, string Action);
 
-        public readonly OnScreenControl Control;
-        public readonly string ElementName;
-        public readonly byte[] Label;
-        public bool Down;
-        public bool Visible;
-        public Vector2f Min;
-        public Vector2f Max;
-    }
-
-    public OnScreenControls(Input input, params (OnScreenControl Control, string ElementName, string Label)[] buttons)
+    public OnScreenControls(InputMap inputMap,
+        params (OnScreenControl Control, string Action, string Label)[] buttons)
     {
-        _input = input;
+        _inputMap = inputMap;
+        _input = inputMap.GetSubsystem<Input>()!;
+        _overlay = new InputOverlay(inputMap);
+        _overlay.AddJoystick("Movement", "Forward", "Back", "Left", "Right");
+        _overlay.AddButton("Exit", "Exit", null, "BACK", new Vector2f(0.0f, 0.0f),
+            new Vector2f(12.0f, 12.0f), InputOverlayAlignment.TopLeft, new Vector2f(52.0f, 40.0f));
+
         _buttons = new Button[buttons.Length];
         for (var i = 0; i < buttons.Length; ++i)
         {
             var button = buttons[i];
-            _buttons[i] = new Button(button.Control, button.ElementName, button.Label);
+            var name = $"Action{i}";
+            _buttons[i] = new Button(button.Control, name, button.Action);
+            var column = i % 2;
+            var row = i / 2;
+            _overlay.AddButton(name, button.Action, null, button.Label,
+                new Vector2f(1.0f, 1.0f), new Vector2f(-12.0f - column * 84.0f, -12.0f - row * 84.0f),
+                InputOverlayAlignment.BottomRight);
         }
-        SubscribeToEvent<InputEvents.SDLRawInputEvent>(input, HandleRawInput);
     }
 
     public bool IsVisible => _input.ActiveInputDevice == InputDeviceType.Touch;
 
     public OnScreenControl Draw(OnScreenControl visibleControls, bool showJoystick)
     {
-        const int columns = 2;
-        var visibleButtonCount = 0;
-        for (var i = 0; i < _buttons.Length; ++i)
-        {
-            _buttons[i].Visible = (visibleControls & _buttons[i].Control) != 0;
-            if (_buttons[i].Visible)
-                ++visibleButtonCount;
-            else
-                SetButtonState(_buttons[i], false);
-        }
-
-        var rows = (visibleButtonCount + columns - 1) / columns;
-        var displaySize = ImGui.GetIO().DisplaySize;
-        var buttonSize = displaySize.Y < 500.0f ? CompactButtonSize : ButtonSize;
-        var windowSize = new Vector2f(
-            columns * buttonSize.X + WindowPadding * 2.0f + ButtonSpacing,
-            rows * buttonSize.Y + WindowPadding * 2.0f + Math.Max(0, rows - 1) * ButtonSpacing);
-        UpdateButtonRects(displaySize - windowSize - ScreenMargin, buttonSize);
-
-        if (!IsVisible)
-        {
-            ReleaseButtons();
-            _movementTouchId = -1;
-            return OnScreenControl.None;
-        }
-
-        if (showJoystick)
-            DrawJoystick();
-
-        if (visibleButtonCount == 0)
-            return OnScreenControl.None;
-
-        ImGui.SetNextWindowPos(displaySize - windowSize - ScreenMargin, ImGuiCond.ImGuiCondAlways);
-        ImGui.SetNextWindowSize(windowSize, ImGuiCond.ImGuiCondAlways);
-        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarWindowPadding, new Vector2f(WindowPadding, WindowPadding));
-        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarItemSpacing, new Vector2f(ButtonSpacing, ButtonSpacing));
-        ImGui.PushStyleVar(ImGuiStyleVar.ImGuiStyleVarFrameRounding, 18.0f);
-        ImGui.PushStyleColor(ImGuiCol.ImGuiColButton, ButtonColor);
-        ImGui.PushStyleColor(ImGuiCol.ImGuiColButtonHovered, ButtonHoveredColor);
-        ImGui.PushStyleColor(ImGuiCol.ImGuiColButtonActive, ButtonActiveColor);
-
+        _overlay.SetJoystickVisible("Movement", showJoystick);
         var pressed = OnScreenControl.None;
-        var open = true;
-        if (ImGui.Begin("##On-screen controls"u8, ref open,
-                ImGuiWindowFlags.ImGuiWindowFlagsNoDecoration |
-                ImGuiWindowFlags.ImGuiWindowFlagsNoMove |
-                ImGuiWindowFlags.ImGuiWindowFlagsNoSavedSettings |
-                ImGuiWindowFlags.ImGuiWindowFlagsNoBackground))
+        foreach (var button in _buttons)
         {
-            var visibleIndex = 0;
-            for (var i = 0; i < _buttons.Length; ++i)
-            {
-                var button = _buttons[i];
-                if ((visibleControls & button.Control) == 0)
-                    continue;
-                if (visibleIndex % columns != 0)
-                    ImGui.SameLine();
-
-                ImGui.Button(button.Label, buttonSize);
-                button.Visible = true;
-                button.Min = ImGui.GetItemRectMin();
-                button.Max = ImGui.GetItemRectMax();
-                var down = IsTouched(button);
-                if (down && !button.Down)
-                    pressed |= button.Control;
-                SetButtonState(button, down);
-                ++visibleIndex;
-            }
+            var visible = (visibleControls & button.Control) != 0;
+            _overlay.SetButtonVisible(button.Name, visible);
+            if (visible && _inputMap.EvaluatePressed(button.Action))
+                pressed |= button.Control;
         }
-        ImGui.End();
-        ImGui.PopStyleColor(3);
-        ImGui.PopStyleVar(3);
         return pressed;
     }
 
-    private void DrawJoystick()
-    {
-        var displaySize = ImGui.GetIO().DisplaySize;
-        var radius = MathDefs.Clamp(MathF.Min(displaySize.X, displaySize.Y) * 0.105f, 48.0f, 78.0f);
-        var center = new Vector2f(radius + ScreenMargin.X, displaySize.Y - radius - ScreenMargin.Y);
-        Vector2f? touchPosition = null;
+    public void Dispose() => _overlay.Dispose();
 
-        if (_movementTouchId >= 0)
-        {
-            if (_touches.TryGetValue(_movementTouchId, out var touch))
-                touchPosition = ToLogical(touch, displaySize);
-            else
-                _movementTouchId = -1;
-        }
-        if (_movementTouchId < 0)
-        {
-            foreach (var touch in _touches)
-            {
-                if (touch.Value.X >= 0.5f)
-                    continue;
-                _movementTouchId = touch.Key;
-                _movementTouchOrigin = touch.Value;
-                touchPosition = ToLogical(touch.Value, displaySize);
-                break;
-            }
-        }
-
-        var marker = center;
-        var active = touchPosition.HasValue;
-        if (active)
-        {
-            center = ToLogical(_movementTouchOrigin, displaySize);
-            var delta = touchPosition!.Value - center;
-            if (delta.Length > radius)
-                delta *= radius / delta.Length;
-            marker = center + delta;
-        }
-
-        using var drawList = ImGui.GetForegroundDrawList();
-        drawList.AddCircleFilled(center, radius + 8.0f,
-            ImGui.GetColorU32(active ? JoystickGlowActive : JoystickGlow));
-        drawList.AddCircleFilled(center, radius, ImGui.GetColorU32(JoystickBackground));
-        drawList.AddCircle(center, radius, ImGui.GetColorU32(JoystickBorder), 0, 2.0f);
-        drawList.AddCircle(center, radius * 0.5f, ImGui.GetColorU32(JoystickGuide));
-        drawList.AddLine(center - new Vector2f(radius * 0.72f, 0.0f), center + new Vector2f(radius * 0.72f, 0.0f),
-            ImGui.GetColorU32(JoystickGuide));
-        drawList.AddLine(center - new Vector2f(0.0f, radius * 0.72f), center + new Vector2f(0.0f, radius * 0.72f),
-            ImGui.GetColorU32(JoystickGuide));
-        drawList.AddCircleFilled(marker, radius * 0.28f, ImGui.GetColorU32(JoystickKnobGlow));
-        drawList.AddCircleFilled(marker, radius * 0.18f, ImGui.GetColorU32(JoystickKnob));
-        drawList.AddCircleFilled(marker, radius * 0.055f, ImGui.GetColorU32(JoystickKnobHighlight));
-    }
-
-    private bool IsTouched(Button button)
-    {
-        var displaySize = ImGui.GetIO().DisplaySize;
-        foreach (var touch in _buttonTouches)
-        {
-            if (touch.Value == button && _touches.TryGetValue(touch.Key, out var position)
-                && Contains(button, ToLogical(position, displaySize)))
-                return true;
-        }
-        return false;
-    }
-
-    private void HandleRawInput(ref InputEvents.SDLRawInputEvent args)
-    {
-        var @event = SdlEvent.CreateManagedWrapper(args.SDLEvent, ownsHandle: false);
-        var eventType = (SdlEventType)@event.Type;
-        if (eventType is not (SdlEventType.SdlFingerdown or SdlEventType.SdlFingermotion or SdlEventType.SdlFingerup))
-            return;
-
-        var touchId = @event.TfingerFingerId.GetHashCode();
-        var captured = _buttonTouches.ContainsKey(touchId);
-        if (eventType != SdlEventType.SdlFingerup)
-            _touches[touchId] = new Vector2f(@event.TfingerX, @event.TfingerY);
-
-        if (captured)
-        {
-            args.Consumed = true;
-        }
-        else if (eventType == SdlEventType.SdlFingerdown && IsVisible)
-        {
-            var displaySize = ImGui.GetIO().DisplaySize;
-            var position = new Vector2f(@event.TfingerX * displaySize.X, @event.TfingerY * displaySize.Y);
-            for (var i = 0; i < _buttons.Length; ++i)
-            {
-                if (_buttons[i].Visible && Contains(_buttons[i], position))
-                {
-                    captured = true;
-                    _buttonTouches.Add(touchId, _buttons[i]);
-                    break;
-                }
-            }
-            args.Consumed = captured;
-        }
-
-        if (eventType == SdlEventType.SdlFingerup)
-        {
-            _touches.Remove(touchId);
-            _buttonTouches.Remove(touchId);
-        }
-    }
-
-    private void ReleaseButtons()
-    {
-        for (var i = 0; i < _buttons.Length; ++i)
-            SetButtonState(_buttons[i], false);
-    }
-
-    private void UpdateButtonRects(Vector2f windowPosition, Vector2f buttonSize)
-    {
-        var visibleIndex = 0;
-        for (var i = 0; i < _buttons.Length; ++i)
-        {
-            var button = _buttons[i];
-            if (!button.Visible)
-                continue;
-            var column = visibleIndex % 2;
-            var row = visibleIndex / 2;
-            button.Min = windowPosition + new Vector2f(
-                WindowPadding + column * (buttonSize.X + ButtonSpacing),
-                WindowPadding + row * (buttonSize.Y + ButtonSpacing));
-            button.Max = button.Min + buttonSize;
-            ++visibleIndex;
-        }
-    }
-
-    private void SetButtonState(Button button, bool down)
-    {
-        if (button.Down == down)
-            return;
-
-        button.Down = down;
-        _input.SetScreenButton(button.ElementName, down);
-    }
-
-    private static bool Contains(Button button, Vector2f position) =>
-        position.X >= button.Min.X && position.X <= button.Max.X
-        && position.Y >= button.Min.Y && position.Y <= button.Max.Y;
-
-    private static Vector2f ToLogical(Vector2f normalizedPosition, Vector2f displaySize) =>
-        new(normalizedPosition.X * displaySize.X, normalizedPosition.Y * displaySize.Y);
-
-    private static readonly Vector2f ButtonSize = new(92.0f, 60.0f);
-    private static readonly Vector2f CompactButtonSize = new(78.0f, 50.0f);
-    private static readonly Vector2f ScreenMargin = new(14.0f, 14.0f);
-    private const float WindowPadding = 7.0f;
-    private const float ButtonSpacing = 7.0f;
-    private static readonly Vector4f ButtonColor = new(0.11f, 0.16f, 0.26f, 0.82f);
-    private static readonly Vector4f ButtonHoveredColor = new(0.16f, 0.38f, 0.48f, 0.92f);
-    private static readonly Vector4f ButtonActiveColor = new(0.15f, 0.7f, 0.78f, 0.96f);
-    private static readonly Vector4f JoystickGlow = new(0.08f, 0.12f, 0.24f, 0.42f);
-    private static readonly Vector4f JoystickGlowActive = new(0.08f, 0.75f, 0.84f, 0.22f);
-    private static readonly Vector4f JoystickBackground = new(0.035f, 0.055f, 0.105f, 0.72f);
-    private static readonly Vector4f JoystickBorder = new(0.35f, 0.5f, 0.68f, 0.72f);
-    private static readonly Vector4f JoystickGuide = new(0.28f, 0.38f, 0.58f, 0.45f);
-    private static readonly Vector4f JoystickKnobGlow = new(0.1f, 0.95f, 1.0f, 0.2f);
-    private static readonly Vector4f JoystickKnob = new(0.18f, 0.92f, 1.0f, 0.92f);
-    private static readonly Vector4f JoystickKnobHighlight = new(0.9f, 1.0f, 1.0f, 1.0f);
     private readonly Input _input;
+    private readonly InputMap _inputMap;
+    private readonly InputOverlay _overlay;
     private readonly Button[] _buttons;
-    private readonly Dictionary<int, Vector2f> _touches = [];
-    private readonly Dictionary<int, Button> _buttonTouches = [];
-    private int _movementTouchId = -1;
-    private Vector2f _movementTouchOrigin;
+}
+
+internal static class SampleInputMaps
+{
+    public static InputMap Create(bool movement = false)
+    {
+        var inputMap = new InputMap();
+        inputMap.MapKeyboardKey("Exit", Scancode.Escape);
+        inputMap.MapControllerButton("Exit", ControllerButton.Back);
+        if (movement)
+            MapMovement(inputMap);
+        return inputMap;
+    }
+
+    public static void MapMovement(InputMap inputMap)
+    {
+        MapDirection(inputMap, "Forward", Scancode.W, Scancode.Up, ControllerButton.DPadUp,
+            ControllerAxis.LeftY, -1.0f);
+        MapDirection(inputMap, "Back", Scancode.S, Scancode.Down, ControllerButton.DPadDown,
+            ControllerAxis.LeftY, 1.0f);
+        MapDirection(inputMap, "Left", Scancode.A, Scancode.Left, ControllerButton.DPadLeft,
+            ControllerAxis.LeftX, -1.0f);
+        MapDirection(inputMap, "Right", Scancode.D, Scancode.Right, ControllerButton.DPadRight,
+            ControllerAxis.LeftX, 1.0f);
+    }
+
+    public static void MapDPad(InputMap inputMap)
+    {
+        inputMap.MapControllerButton("Forward", ControllerButton.DPadUp);
+        inputMap.MapControllerButton("Back", ControllerButton.DPadDown);
+        inputMap.MapControllerButton("Left", ControllerButton.DPadLeft);
+        inputMap.MapControllerButton("Right", ControllerButton.DPadRight);
+    }
+
+    public static void MapButton(InputMap inputMap, string action, Scancode scancode,
+        ControllerButton controllerButton)
+    {
+        inputMap.MapKeyboardKey(action, scancode);
+        inputMap.MapControllerButton(action, controllerButton);
+    }
+
+    private static void MapDirection(InputMap inputMap, string action, Scancode primary, Scancode alternate,
+        ControllerButton dPad, ControllerAxis axis, float pressed)
+    {
+        inputMap.MapKeyboardKey(action, primary);
+        inputMap.MapKeyboardKey(action, alternate);
+        inputMap.MapControllerButton(action, dPad);
+        inputMap.MapControllerAxis(action, axis, 0.0f, pressed);
+    }
 }

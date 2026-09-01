@@ -51,6 +51,7 @@ public sealed class RaycastVehicleDemo : Application
     private bool _toggleDebugRequested;
     private Texture2D[]? _controlPrompts;
     private OnScreenControls? _onScreenControls;
+    private InputMap? _inputMap;
     private static readonly Vector2f PromptIconSize = new(24.0f, 24.0f);
 
     protected override void Setup(EngineParameters parameters)
@@ -210,7 +211,11 @@ public sealed class RaycastVehicleDemo : Application
         _vehicle = vehicleNode.CreateComponent<Vehicle2>();
         var moveAndOrbit = vehicleNode.CreateComponent<MoveAndOrbitController>();
         moveAndOrbit.LoadInputMap("Input/MoveAndOrbit.inputmap");
-        _vehicle.SetInputMap(moveAndOrbit.GetInputMap());
+        _inputMap = moveAndOrbit.GetInputMap()!;
+        SampleInputMaps.MapDPad(_inputMap);
+        SampleInputMaps.MapButton(_inputMap, "Exit", Scancode.Escape, ControllerButton.Back);
+        SampleInputMaps.MapButton(_inputMap, "Debug", Scancode.Space, ControllerButton.Y);
+        _vehicle.SetInputMap(_inputMap);
         _vehicle.Init();
     }
 
@@ -228,8 +233,8 @@ public sealed class RaycastVehicleDemo : Application
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/generic_joystick.png"),
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
         ];
-        _onScreenControls = new OnScreenControls(Input,
-            (OnScreenControl.Brake, "Button0", "BRAKE"),
+        _onScreenControls = new OnScreenControls(_inputMap!,
+            (OnScreenControl.Brake, "Brake", "BRAKE"),
             (OnScreenControl.Debug, "Debug", "DEBUG"));
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>(
             (ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
@@ -245,14 +250,14 @@ public sealed class RaycastVehicleDemo : Application
 
     protected override void Update(float timeStep)
     {
-        if (Input.ExitRequested || Input.GetKeyPress(Key.Escape))
+        if (Input.ExitRequested || _inputMap!.EvaluatePressed("Exit"))
         {
             Exit();
             return;
         }
 
         if (_vehicle is not null && (_toggleDebugRequested
-                || !ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.Space)))
+                || !ImGui.GetIO().WantCaptureKeyboard && _inputMap.EvaluatePressed("Debug")))
             _drawDebug = !_drawDebug;
         _toggleDebugRequested = false;
     }
@@ -350,9 +355,12 @@ public sealed class RaycastVehicleDemo : Application
 
     private void Cleanup()
     {
+        _onScreenControls?.Dispose();
+        _onScreenControls = null;
         if (_scene is not null)
             Renderer.SetNumViewports(0);
         _vehicle = null;
+        _inputMap = null;
         _cameraNode = null;
         _viewport?.Dispose();
         _viewport = null;

@@ -255,14 +255,18 @@ public class CharacterDemo : Application
         _character = new WeakReference<Character>(character);
         var moveAndOrbit = objectNode.CreateComponent<MoveAndOrbitController>();
         moveAndOrbit.LoadInputMap("Input/MoveAndOrbit.inputmap");
-        character.SetInputMap(moveAndOrbit.GetInputMap());
+        _inputMap = moveAndOrbit.GetInputMap()!;
+        SampleInputMaps.MapDPad(_inputMap);
+        SampleInputMaps.MapButton(_inputMap, "Exit", Scancode.Escape, ControllerButton.Back);
+        SampleInputMaps.MapButton(_inputMap, "View", Scancode.F, ControllerButton.X);
+        character.SetInputMap(_inputMap);
     }
 
     /// <summary>Construct an instruction text to the UI.</summary>
     private void CreateInstructions()
     {
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
-        _controlPrompts = new CharacterControlPrompts(Resources, Input);
+        _controlPrompts = new CharacterControlPrompts(Resources, _inputMap!);
         SubscribeToEvent<DearImGuiEvents.EndRenderingDearImGuiEvent>(
             (ref DearImGuiEvents.EndRenderingDearImGuiEvent _) => DrawInstructions());
 
@@ -284,7 +288,7 @@ public class CharacterDemo : Application
     /// <summary>Handle application update. Set controls to character.</summary>
     protected override void Update(float timeStep)
     {
-        if (Input.ExitRequested || Input.GetKeyPress(Key.Escape))
+        if (Input.ExitRequested || _inputMap!.EvaluatePressed("Exit"))
         {
             Exit();
             return;
@@ -303,7 +307,7 @@ public class CharacterDemo : Application
                 character.Node.SetRotation(new Quaternion(character.GetYaw(), Vector3f.Up));
             }
         }
-        if (_toggleViewRequested || !ImGui.GetIO().WantCaptureKeyboard && Input.GetKeyPress(Key.F))
+        if (_toggleViewRequested || !ImGui.GetIO().WantCaptureKeyboard && _inputMap.EvaluatePressed("View"))
             _firstPerson = !_firstPerson;
         _toggleViewRequested = false;
     }
@@ -401,9 +405,12 @@ public class CharacterDemo : Application
 
     private void Cleanup()
     {
+        _controlPrompts?.Dispose();
+        _controlPrompts = null;
         if (_scene is not null)
             Renderer.SetNumViewports(0);
         _character = null;
+        _inputMap = null;
         _cameraNode = null;
         _viewport?.Dispose();
         _viewport = null;
@@ -422,5 +429,6 @@ public class CharacterDemo : Application
     private bool _toggleViewRequested;
     private DirectionalPadAdapter? _dPadAdapter;
     private CharacterControlPrompts? _controlPrompts;
+    private InputMap? _inputMap;
     private static readonly Vector4f HudBackground = new(0.055f, 0.065f, 0.085f, 0.96f);
 }
