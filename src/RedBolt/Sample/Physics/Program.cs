@@ -112,12 +112,7 @@ public class PhysicsSample : Application
         _cameraNode = _scene.CreateChild("Camera");
         _cameraNode.CreateComponent<FreeFlyController>().SetSpeed(20.0f);
         var camera = _cameraNode.CreateComponent<Camera>();
-        void UpdateShadowCascades() => light.SetShadowCascade(ShadowCascadeEstimator.Estimate(camera,
-            new Vector2i(Graphics.Width, Graphics.Height), new RenderPipelineSettings(),
-            new ShadowCascadeEstimateSettings(80.0f) { ShadowResolution = light.GetShadowResolution() }));
-        UpdateShadowCascades();
-        SubscribeToEvent<GraphicsEvents.ScreenModeEvent>(
-            (ref GraphicsEvents.ScreenModeEvent _) => UpdateShadowCascades());
+        light.SetShadowCascade(new CascadeParameters(12.0f, 35.0f, 80.0f, 0.0f, 0.8f));
         _cameraNode.SetPosition(new Vector3f(0.0f, 5.0f, -20.0f));
         _cameraNode.LookAt(new Vector3f(0.0f, 4.0f, 0.0f));
     }
