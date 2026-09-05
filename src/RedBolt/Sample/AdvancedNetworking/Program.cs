@@ -248,6 +248,7 @@ public sealed class AdvancedNetworking : Application
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
         _controlPrompts = LoadControlPrompts();
         _inputMap = SampleInputMaps.Create(movement: true);
+        SampleInputMaps.MapLook(_inputMap);
         SampleInputMaps.MapButton(_inputMap, "Jump", Scancode.Space, ControllerButton.A);
         _inputMap.MapMouseButton("Fire", MouseButton.Left);
         _inputMap.MapControllerButton("Fire", ControllerButton.X);
@@ -456,10 +457,26 @@ public sealed class AdvancedNetworking : Application
                 ImGui.Dummy(new Vector2f(1.0f, 8.0f));
                 BeginPanel("##Controls"u8, 157.0f);
                 DrawSectionLabel("CONTROLS"u8);
-                DrawMovementPrompt("Move"u8);
-                DrawPrompt(_controlPrompts![4], "Jump"u8);
-                DrawPrompt(_controlPrompts[5], "Orbit camera"u8);
-                DrawPrompt(_controlPrompts[6], "Temporal raycast"u8);
+                if (Input.ActiveInputDevice == InputDeviceType.KeyboardMouse)
+                {
+                    DrawMovementPrompt("Move"u8);
+                    DrawPrompt(_controlPrompts![4], "Jump"u8);
+                    DrawPrompt(_controlPrompts[5], "Orbit camera"u8);
+                    DrawPrompt(_controlPrompts[6], "Temporal raycast"u8);
+                }
+                else
+                {
+                    DrawPrompt(Input.ActiveInputDevice == InputDeviceType.Touch
+                            ? SampleInputMap.GetMovementPrompt()
+                            : SampleInputMap.GetControllerPrompt(ControllerButton.LeftStick),
+                        Input.ActiveInputDevice == InputDeviceType.Touch ? "Drag left side to move"u8 : "Move"u8);
+                    DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.A), "Jump"u8);
+                    DrawPrompt(Input.ActiveInputDevice == InputDeviceType.Touch
+                            ? Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
+                            : SampleInputMap.GetControllerPrompt(ControllerButton.RightStick),
+                        Input.ActiveInputDevice == InputDeviceType.Touch ? "Swipe right side to orbit camera"u8 : "Orbit camera"u8);
+                    DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.X), "Temporal raycast"u8);
+                }
                 EndPanel();
             }
         }
@@ -629,7 +646,8 @@ public sealed class AdvancedNetworking : Application
 
     private void UpdateControl(float timeStep)
     {
-        var cameraMoving = Input.GetMouseButtonDown(MouseButton.Right) && !ImGui.GetIO().WantCaptureMouse;
+        var keyboardMouse = Input.ActiveInputDevice == InputDeviceType.KeyboardMouse;
+        var cameraMoving = keyboardMouse && Input.GetMouseButtonDown(MouseButton.Right) && !ImGui.GetIO().WantCaptureMouse;
         Input.SetMouseMode(cameraMoving ? MouseMode.Relative : MouseMode.Free);
         Input.SetMouseVisible(!cameraMoving);
         if (cameraMoving)
@@ -637,6 +655,24 @@ public sealed class AdvancedNetworking : Application
             var mouseMove = Input.GetMouseMove();
             _yaw += 0.1f * mouseMove.X;
             _pitch = System.Math.Clamp(_pitch + 0.1f * mouseMove.Y, 1.0f, 90.0f);
+        }
+        else if (Input.ActiveInputDevice == InputDeviceType.Joystick)
+        {
+            _yaw += (_inputMap!.Evaluate("TurnRight") - _inputMap.Evaluate("TurnLeft")) * 90.0f * timeStep;
+            _pitch = System.Math.Clamp(_pitch
+                + (_inputMap.Evaluate("LookDown") - _inputMap.Evaluate("LookUp")) * 90.0f * timeStep,
+                1.0f, 90.0f);
+        }
+        else if (Input.ActiveInputDevice == InputDeviceType.Touch)
+        {
+            for (var i = 0u; i < Input.GetNumTouches(); ++i)
+            {
+                var touch = Input.GetTouch(i)!.Value;
+                if (touch.Position.X < Graphics.Width / 2 || _onScreenControls!.IsTouchCaptured(touch.TouchID))
+                    continue;
+                _yaw += 0.1f * touch.Delta.X;
+                _pitch = System.Math.Clamp(_pitch + 0.1f * touch.Delta.Y, 1.0f, 90.0f);
+            }
         }
         _cameraNode!.SetRotation(new Quaternion(_pitch, _yaw, 0.0f));
 
@@ -657,13 +693,24 @@ public sealed class AdvancedNetworking : Application
         var direction = Vector3f.Zero;
         if (!ImGui.GetIO().WantCaptureKeyboard)
         {
-            if (_inputMap!.Evaluate("Forward") != 0.0f || (_autoMovement && _autoMovementPhase == 3)) direction += rotation * Vector3f.Forward;
-            if (_inputMap.Evaluate("Back") != 0.0f || (_autoMovement && _autoMovementPhase == 1)) direction += rotation * Vector3f.Back;
-            if (_inputMap.Evaluate("Left") != 0.0f || (_autoMovement && _autoMovementPhase == 2)) direction += rotation * Vector3f.Left;
-            if (_inputMap.Evaluate("Right") != 0.0f || (_autoMovement && _autoMovementPhase == 0)) direction += rotation * Vector3f.Right;
+            var forwardAmount = _inputMap!.Evaluate("Forward") - _inputMap.Evaluate("Back");
+            var rightAmount = _inputMap.Evaluate("Right") - _inputMap.Evaluate("Left");
+            direction = rotation * (Vector3f.Forward * forwardAmount + Vector3f.Right * rightAmount);
+            if (_autoMovement)
+            {
+                direction = rotation * (_autoMovementPhase switch
+                {
+                    0 => Vector3f.Right,
+                    1 => Vector3f.Back,
+                    2 => Vector3f.Left,
+                    _ => Vector3f.Forward
+                });
+            }
+            if (direction.LengthSquared > 1.0f)
+                direction.Normalize();
         }
         var controller = clientObject.GetComponent<PredictedKinematicController>();
-        controller?.SetWalkVelocity(direction.NormalizedOrDefault() * WalkVelocity);
+        controller?.SetWalkVelocity(direction * WalkVelocity);
         if ((Input.ActiveInputDevice == InputDeviceType.Touch
                 || !ImGui.GetIO().WantCaptureKeyboard) && _inputMap!.Evaluate("Jump") != 0.0f)
             controller?.SetJump();
@@ -676,8 +723,9 @@ public sealed class AdvancedNetworking : Application
         if (automaticClick)
             _autoClickTime %= 0.25f;
         var touchInput = Input.ActiveInputDevice == InputDeviceType.Touch;
+        var firePressed = _onScreenControls!.IsPressed(OnScreenControl.Fire);
         if (((touchInput || !ImGui.GetIO().WantCaptureMouse && !ImGui.GetIO().WantCaptureKeyboard)
-                && _inputMap!.EvaluatePressed("Fire")) || automaticClick)
+                && firePressed) || automaticClick)
         {
             var viewport = Renderer.GetViewport();
             var mousePosition = Input.GetMousePosition();

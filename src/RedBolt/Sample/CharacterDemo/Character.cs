@@ -89,8 +89,8 @@ public partial class Character : MoveAndOrbitComponent
         // Velocity on the XZ plane
         var planeVelocity = new Vector3f(velocity.X, 0.0f, velocity.Z);
 
-        // Normalize move vector so that diagonal strafing is not faster
-        if (moveDir.LengthSquared > 0.0f)
+        // Clamp move vector so that diagonal strafing is not faster while preserving analog input magnitude
+        if (moveDir.LengthSquared > 1.0f)
             moveDir.Normalize();
 
         // If in air, allow control, but slower than when on ground

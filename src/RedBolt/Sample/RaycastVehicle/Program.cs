@@ -225,7 +225,7 @@ public sealed class RaycastVehicleDemo : Application
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/mouse_move.png"),
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_f.png"),
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_space.png"),
-            Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/generic_joystick.png"),
+            SampleInputMap.GetControllerPrompt(ControllerButton.LeftStick),
             Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
         ];
         _onScreenControls = new OnScreenControls(_inputMap!,
@@ -314,15 +314,11 @@ public sealed class RaycastVehicleDemo : Application
             else
             {
                 _onScreenControls.Draw(OnScreenControl.Brake | OnScreenControl.Debug, true);
-                for (var i = 0; i < 3; ++i)
-                {
-                    ImGui.Image(_controlPrompts![i], PromptIconSize);
-                    ImGui.SameLine();
-                }
-                DrawPrompt(_controlPrompts![3], "Drive"u8);
-                DrawPrompt(_controlPrompts[4], "Rotate camera"u8);
-                DrawPrompt(_controlPrompts[5], "Brake"u8);
-                DrawPrompt(_controlPrompts[6], _drawDebug ? "Hide physics debug"u8 : "Show physics debug"u8);
+                DrawPrompt(SampleInputMap.GetMovementPrompt(), "Drive"u8);
+                DrawPrompt(SampleInputMap.GetLookPrompt(), "Rotate camera"u8);
+                DrawPrompt(SampleInputMap.GetActionPrompt(_controlPrompts![5], ControllerButton.A), "Brake"u8);
+                DrawPrompt(SampleInputMap.GetActionPrompt(_controlPrompts[6], ControllerButton.Y),
+                    _drawDebug ? "Hide physics debug"u8 : "Show physics debug"u8);
             }
         }
         ImGui.End();

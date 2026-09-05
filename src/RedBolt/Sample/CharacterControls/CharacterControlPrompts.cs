@@ -11,6 +11,7 @@ using RedBolt.Graphics;
 using RedBolt.Input;
 using RedBolt.Math;
 using RedBolt.Resource;
+using RedBolt.Sample;
 using Widgets = RedBolt.SystemUI.Widgets;
 
 internal sealed class CharacterControlPrompts : IDisposable
@@ -29,7 +30,7 @@ internal sealed class CharacterControlPrompts : IDisposable
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_shift.png"),
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_m.png"),
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/keyboard_escape.png"),
-            resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/generic_joystick.png"),
+            SampleInputMap.GetControllerPrompt(ControllerButton.LeftStick),
             resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
         ];
         _onScreenControls = new OnScreenControls(inputMap,
@@ -37,6 +38,7 @@ internal sealed class CharacterControlPrompts : IDisposable
             (OnScreenControl.Crouch, "Crouch", "CROUCH"),
             (OnScreenControl.View, "View", "VIEW"),
             (OnScreenControl.Debug, "Debug", "DEBUG"));
+        _input = inputMap.GetSubsystem<Input>()!;
     }
 
     public ControlActions Draw(bool showCrouch, bool showDebug)
@@ -58,6 +60,20 @@ internal sealed class CharacterControlPrompts : IDisposable
         }
 
         _onScreenControls.Draw(visibleControls, true);
+
+        if (_input.ActiveInputDevice == InputDeviceType.Joystick)
+        {
+            DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.LeftStick), "Move"u8);
+            DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.RightStick), "Rotate camera"u8);
+            DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.A), "Jump"u8);
+            if (showCrouch)
+                DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.B), "Crouch"u8);
+            DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.X), "Toggle 1st/3rd person"u8);
+            if (showDebug)
+                DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.Y), "Toggle physics debug geometry"u8);
+            DrawPrompt(SampleInputMap.GetControllerPrompt(ControllerButton.Back), "Exit"u8);
+            return default;
+        }
 
         for (var i = 0; i < 3; ++i)
         {
@@ -92,6 +108,7 @@ internal sealed class CharacterControlPrompts : IDisposable
     private static readonly Vector2f IconSize = new(24.0f, 24.0f);
     private readonly Texture2D[] _textures;
     private readonly OnScreenControls _onScreenControls;
+    private readonly Input _input;
 }
 
 internal readonly record struct ControlActions(bool ViewPressed, bool DebugPressed);

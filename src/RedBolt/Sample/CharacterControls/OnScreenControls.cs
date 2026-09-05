@@ -8,6 +8,7 @@ using System;
 
 using RedBolt.Input;
 using RedBolt.Math;
+using RedBolt.Sample;
 
 [Flags]
 internal enum OnScreenControl
@@ -36,8 +37,6 @@ internal sealed class OnScreenControls : IDisposable
         _input = inputMap.GetSubsystem<Input>()!;
         _overlay = new InputOverlay(inputMap);
         _overlay.AddJoystick("Movement", "Forward", "Back", "Left", "Right");
-        _overlay.AddButton("Exit", "Exit", null, "BACK", new Vector2f(0.0f, 0.0f),
-            new Vector2f(12.0f, 12.0f), InputOverlayAlignment.TopLeft, new Vector2f(52.0f, 40.0f));
 
         _buttons = new Button[buttons.Length];
         for (var i = 0; i < buttons.Length; ++i)
@@ -47,29 +46,55 @@ internal sealed class OnScreenControls : IDisposable
             _buttons[i] = new Button(button.Control, name, button.Action);
             var column = i % 2;
             var row = i / 2;
-            _overlay.AddButton(name, button.Action, null, button.Label,
-                new Vector2f(1.0f, 1.0f), new Vector2f(-12.0f - column * 84.0f, -12.0f - row * 84.0f),
+            _overlay.AddButton(name, button.Action, SampleInputMap.GetControllerPrompt(GetControllerButton(
+                    button.Control)), button.Label,
+                new Vector2f(1.0f, 1.0f), new Vector2f(-15.0f - column * 84.0f, -15.0f - row * 84.0f),
                 InputOverlayAlignment.BottomRight);
         }
     }
 
     public bool IsVisible => _input.ActiveInputDevice == InputDeviceType.Touch;
 
+    public bool IsTouchCaptured(int touchId) => _overlay.IsTouchCaptured(touchId);
+
     public OnScreenControl Draw(OnScreenControl visibleControls, bool showJoystick)
     {
+        _overlay.AttachToPrimaryViewport();
         _overlay.SetJoystickVisible("Movement", showJoystick);
         var pressed = OnScreenControl.None;
         foreach (var button in _buttons)
         {
             var visible = (visibleControls & button.Control) != 0;
             _overlay.SetButtonVisible(button.Name, visible);
-            if (visible && _inputMap.EvaluatePressed(button.Action))
+            if (visible && IsPressed(button))
                 pressed |= button.Control;
         }
         return pressed;
     }
 
+    public bool IsPressed(OnScreenControl control)
+    {
+        foreach (var button in _buttons)
+        {
+            if (button.Control == control)
+                return IsPressed(button);
+        }
+        return false;
+    }
+
     public void Dispose() => _overlay.Dispose();
+
+    private bool IsPressed(Button button) => _input.ActiveInputDevice == InputDeviceType.Touch
+        ? _overlay.IsButtonPressed(button.Name)
+        : _inputMap.EvaluatePressed(button.Action);
+
+    private static ControllerButton GetControllerButton(OnScreenControl control) => control switch
+    {
+        OnScreenControl.Crouch => ControllerButton.B,
+        OnScreenControl.View => ControllerButton.X,
+        OnScreenControl.Debug => ControllerButton.Y,
+        _ => ControllerButton.A
+    };
 
     private readonly Input _input;
     private readonly InputMap _inputMap;
@@ -99,6 +124,14 @@ internal static class SampleInputMaps
             ControllerAxis.LeftX, -1.0f);
         MapDirection(inputMap, "Right", Scancode.D, Scancode.Right, ControllerButton.DPadRight,
             ControllerAxis.LeftX, 1.0f);
+    }
+
+    public static void MapLook(InputMap inputMap)
+    {
+        inputMap.MapControllerAxis("TurnLeft", ControllerAxis.RightX, 0.0f, -1.0f);
+        inputMap.MapControllerAxis("TurnRight", ControllerAxis.RightX, 0.0f, 1.0f);
+        inputMap.MapControllerAxis("LookUp", ControllerAxis.RightY, 0.0f, -1.0f);
+        inputMap.MapControllerAxis("LookDown", ControllerAxis.RightY, 0.0f, 1.0f);
     }
 
     public static void MapDPad(InputMap inputMap)

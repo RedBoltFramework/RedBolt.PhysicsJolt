@@ -135,8 +135,8 @@ public partial class KinematicCharacter : MoveAndOrbitComponent
             kinematicController.Offset = new Vector3f(0.0f, 0.9f, 0.0f);
         }
 
-        // Normalize move vector so that diagonal strafing is not faster
-        if (moveDir.LengthSquared > 0.0f)
+        // Clamp move vector so that diagonal strafing is not faster while preserving analog input magnitude
+        if (moveDir.LengthSquared > 1.0f)
             moveDir.Normalize();
 
         // rotate movedir

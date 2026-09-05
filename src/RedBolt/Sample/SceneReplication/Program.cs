@@ -155,6 +155,7 @@ public sealed class SceneReplication : Application
         Context.RegisterAssembly(typeof(SceneReplicationPlayer).Assembly);
         Context.RegisterSubsystem(new DearImGui((ImGuiConfigFlags)Engine.Parameters.DearImGuiFlags));
         _inputMap = SampleInputMaps.Create(movement: true);
+        SampleInputMaps.MapLook(_inputMap);
         _onScreenControls = new OnScreenControls(_inputMap);
         _controlPrompts = LoadControlPrompts();
         _addressBuffer = Marshal.AllocHGlobal(AddressBufferSize);
@@ -357,8 +358,22 @@ public sealed class SceneReplication : Application
                 ImGui.Dummy(new Vector2f(1.0f, 8.0f));
                 BeginPanel("##Controls"u8, 100.0f);
                 DrawSectionLabel("CONTROLS"u8);
-                DrawMovementPrompt("Roll ball"u8);
-                DrawPrompt(_controlPrompts![4], "Orbit camera"u8);
+                if (Input.ActiveInputDevice == InputDeviceType.KeyboardMouse)
+                {
+                    DrawMovementPrompt("Roll ball"u8);
+                    DrawPrompt(_controlPrompts![4], "Orbit camera"u8);
+                }
+                else
+                {
+                    DrawPrompt(Input.ActiveInputDevice == InputDeviceType.Touch
+                            ? SampleInputMap.GetMovementPrompt()
+                            : SampleInputMap.GetControllerPrompt(ControllerButton.LeftStick),
+                        Input.ActiveInputDevice == InputDeviceType.Touch ? "Drag left side to roll ball"u8 : "Roll ball"u8);
+                    DrawPrompt(Input.ActiveInputDevice == InputDeviceType.Touch
+                            ? Resources.Get<Texture2D>("ThirdParty/KenneyInputPrompts/touch_swipe_move.png")
+                            : SampleInputMap.GetControllerPrompt(ControllerButton.RightStick),
+                        Input.ActiveInputDevice == InputDeviceType.Touch ? "Swipe right side to orbit camera"u8 : "Orbit camera"u8);
+                }
                 EndPanel();
             }
         }
@@ -423,7 +438,8 @@ public sealed class SceneReplication : Application
     {
         if (_cameraNode is null)
             return;
-        var rotating = Input.GetMouseButtonDown(MouseButton.Right) && !ImGui.GetIO().WantCaptureMouse;
+        var keyboardMouse = Input.ActiveInputDevice == InputDeviceType.KeyboardMouse;
+        var rotating = keyboardMouse && Input.GetMouseButtonDown(MouseButton.Right) && !ImGui.GetIO().WantCaptureMouse;
         Input.SetMouseMode(rotating ? MouseMode.Relative : MouseMode.Free);
         Input.SetMouseVisible(!rotating);
         if (rotating)
@@ -431,6 +447,25 @@ public sealed class SceneReplication : Application
             var mouseMove = Input.GetMouseMove();
             _yaw += 0.1f * mouseMove.X;
             _pitch = System.Math.Clamp(_pitch + 0.1f * mouseMove.Y, 1.0f, 90.0f);
+        }
+        else if (Input.ActiveInputDevice == InputDeviceType.Joystick)
+        {
+            var timeStep = Context.GetSubsystem<Time>()!.TimeStep;
+            _yaw += (_inputMap!.Evaluate("TurnRight") - _inputMap.Evaluate("TurnLeft")) * 90.0f * timeStep;
+            _pitch = System.Math.Clamp(_pitch
+                + (_inputMap.Evaluate("LookDown") - _inputMap.Evaluate("LookUp")) * 90.0f * timeStep,
+                1.0f, 90.0f);
+        }
+        else if (Input.ActiveInputDevice == InputDeviceType.Touch)
+        {
+            for (var i = 0u; i < Input.GetNumTouches(); ++i)
+            {
+                var touch = Input.GetTouch(i)!.Value;
+                if (touch.Position.X < Graphics.Width / 2 || _onScreenControls!.IsTouchCaptured(touch.TouchID))
+                    continue;
+                _yaw += 0.1f * touch.Delta.X;
+                _pitch = System.Math.Clamp(_pitch + 0.1f * touch.Delta.Y, 1.0f, 90.0f);
+            }
         }
         _cameraNode.SetRotation(new Quaternion(_pitch, _yaw, 0.0f));
         if (GetPlayerObject() is { } playerNode)
