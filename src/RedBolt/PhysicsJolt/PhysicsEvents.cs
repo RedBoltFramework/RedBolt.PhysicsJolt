@@ -4,6 +4,8 @@
 
 namespace RedBolt.PhysicsJolt;
 
+using System;
+
 using RedBolt.Scene;
 
 public static class PhysicsEvents
@@ -42,7 +44,8 @@ public static class PhysicsEvents
         public RigidBody? BodyA;
         public RigidBody? BodyB;
         public bool Trigger;
-        public IReadOnlyList<PhysicsContact> Contacts;
+        /// <summary>Borrowed contact view, valid until the next physics simulation step.</summary>
+        public ArraySegment<PhysicsContact> Contacts;
     }
 
     public struct PhysicsCollisionEvent
@@ -53,7 +56,8 @@ public static class PhysicsEvents
         public RigidBody? BodyA;
         public RigidBody? BodyB;
         public bool Trigger;
-        public IReadOnlyList<PhysicsContact> Contacts;
+        /// <summary>Borrowed contact view, valid until the next physics simulation step.</summary>
+        public ArraySegment<PhysicsContact> Contacts;
     }
 
     public struct PhysicsCollisionEndEvent
@@ -72,7 +76,8 @@ public static class PhysicsEvents
         public Node OtherNode;
         public RigidBody? OtherBody;
         public bool Trigger;
-        public IReadOnlyList<PhysicsContact> Contacts;
+        /// <summary>Borrowed contact view, valid until the next physics simulation step.</summary>
+        public ArraySegment<PhysicsContact> Contacts;
     }
 
     public struct NodeCollisionEvent
@@ -81,7 +86,8 @@ public static class PhysicsEvents
         public Node OtherNode;
         public RigidBody? OtherBody;
         public bool Trigger;
-        public IReadOnlyList<PhysicsContact> Contacts;
+        /// <summary>Borrowed contact view, valid until the next physics simulation step.</summary>
+        public ArraySegment<PhysicsContact> Contacts;
     }
 
     public struct NodeCollisionEndEvent

@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 using RedBolt.Bindings.DearImGui;
+using RedBolt.Container;
 using RedBolt.Core;
 using RedBolt.DearImGui;
 using RedBolt.Engine;
@@ -217,6 +218,10 @@ public sealed class SceneReplication : Application
             Marshal.FreeHGlobal(_addressBuffer);
             _addressBuffer = IntPtr.Zero;
         }
+        _modeText.Dispose();
+        _packetsText.Dispose();
+        _bytesText.Dispose();
+        _connectionsText.Dispose();
         base.Stop();
     }
 
@@ -343,14 +348,17 @@ public sealed class SceneReplication : Application
             ImGui.Dummy(new Vector2f(1.0f, 8.0f));
             BeginPanel("##Telemetry"u8, 116.0f);
             DrawSectionLabel("TELEMETRY"u8);
-            var mode = clientConnected ? "Client connected" : serverRunning ? "Server running" : "Offline";
+            _modeText.Set(clientConnected ? "Client connected" : serverRunning ? "Server running" : "Offline");
+            _packetsText.FormatInPlace($"Packets in/out: {_statistics.PacketsInPerSec} / {_statistics.PacketsOutPerSec}");
+            _bytesText.FormatInPlace($"Bytes in/out: {_statistics.BytesInPerSec} / {_statistics.BytesOutPerSec}");
+            _connectionsText.FormatInPlace($"Connections: {_connectionCount}");
             ImGui.PushStyleColor(ImGuiCol.ImGuiColText,
                 clientConnected || serverRunning ? StatusOnline : StatusOffline);
-            ImGui.TextUnformatted(Encoding.UTF8.GetBytes(mode));
+            ImGui.TextUnformatted(_modeText.ContentBytes);
             ImGui.PopStyleColor();
-            ImGui.TextUnformatted(Encoding.UTF8.GetBytes($"Packets in/out: {_statistics.PacketsInPerSec} / {_statistics.PacketsOutPerSec}"));
-            ImGui.TextUnformatted(Encoding.UTF8.GetBytes($"Bytes in/out: {_statistics.BytesInPerSec} / {_statistics.BytesOutPerSec}"));
-            ImGui.TextUnformatted(Encoding.UTF8.GetBytes($"Connections: {_connectionCount}"));
+            ImGui.TextUnformatted(_packetsText.ContentBytes);
+            ImGui.TextUnformatted(_bytesText.ContentBytes);
+            ImGui.TextUnformatted(_connectionsText.ContentBytes);
             EndPanel();
 
             if (hasControls)
@@ -629,6 +637,10 @@ public sealed class SceneReplication : Application
     private float _statisticsTime;
     private NetworkStatisticsSnapshot _statistics;
     private int _connectionCount;
+    private readonly CString _modeText = new();
+    private readonly CString _packetsText = new();
+    private readonly CString _bytesText = new();
+    private readonly CString _connectionsText = new();
     private int _nextPlayerColor;
     private bool _startServerOnLaunch;
     private string _connectOnLaunch = string.Empty;

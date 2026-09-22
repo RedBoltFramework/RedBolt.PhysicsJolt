@@ -16,6 +16,7 @@ using Sphere = RedBolt.Math.Sphere;
 [Reflected(ObjectCategory.Category_Physics, InheritAttributes = false)]
 public partial class KinematicCharacterController : Component
 {
+    private static readonly ArraySegment<PhysicsContact> EmptyContacts = new(Array.Empty<PhysicsContact>());
     private readonly HashSet<uint> _activeTriggerBodies = [];
     private WeakReference<PhysicsWorld>? _physicsWorld;
     private Character? _character;
@@ -464,23 +465,22 @@ public partial class KinematicCharacterController : Component
             return;
         }
 
-        var contacts = Array.Empty<PhysicsContact>();
         if (isNew)
         {
             var physicsStart = new PhysicsEvents.PhysicsCollisionStartEvent
             {
                 World = world, NodeA = node, NodeB = otherNode, BodyA = null, BodyB = otherBody,
-                Trigger = true, Contacts = contacts
+                Trigger = true, Contacts = EmptyContacts
             };
             SendEvent(ref physicsStart);
             var nodeStart = new PhysicsEvents.NodeCollisionStartEvent
             {
-                Body = null, OtherNode = otherNode, OtherBody = otherBody, Trigger = true, Contacts = contacts
+                Body = null, OtherNode = otherNode, OtherBody = otherBody, Trigger = true, Contacts = EmptyContacts
             };
             node.SendEvent(ref nodeStart);
             var otherNodeStart = new PhysicsEvents.NodeCollisionStartEvent
             {
-                Body = otherBody, OtherNode = node, OtherBody = null, Trigger = true, Contacts = contacts
+                Body = otherBody, OtherNode = node, OtherBody = null, Trigger = true, Contacts = EmptyContacts
             };
             otherNode.SendEvent(ref otherNodeStart);
             return;
@@ -489,17 +489,17 @@ public partial class KinematicCharacterController : Component
         var physicsOngoing = new PhysicsEvents.PhysicsCollisionEvent
         {
             World = world, NodeA = node, NodeB = otherNode, BodyA = null, BodyB = otherBody,
-            Trigger = true, Contacts = contacts
+            Trigger = true, Contacts = EmptyContacts
         };
         SendEvent(ref physicsOngoing);
         var nodeOngoing = new PhysicsEvents.NodeCollisionEvent
         {
-            Body = null, OtherNode = otherNode, OtherBody = otherBody, Trigger = true, Contacts = contacts
+            Body = null, OtherNode = otherNode, OtherBody = otherBody, Trigger = true, Contacts = EmptyContacts
         };
         node.SendEvent(ref nodeOngoing);
         var otherNodeOngoing = new PhysicsEvents.NodeCollisionEvent
         {
-            Body = otherBody, OtherNode = node, OtherBody = null, Trigger = true, Contacts = contacts
+            Body = otherBody, OtherNode = node, OtherBody = null, Trigger = true, Contacts = EmptyContacts
         };
         otherNode.SendEvent(ref otherNodeOngoing);
     }

@@ -29,6 +29,7 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
     private static Factory? _joltFactory;
     private static int _joltReferenceCount;
 
+    // Jolt invokes contact callbacks concurrently from its worker threads.
     private readonly object _contactLock = new();
     private readonly List<WeakReference<KinematicCharacterController>> _kinematicCharacters = [];
     private readonly List<WeakReference<RigidBody>> _rigidBodies = [];
@@ -37,8 +38,10 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
     private readonly Dictionary<uint, WeakReference<RigidBody>> _bodiesById = [];
     private readonly Dictionary<uint, WeakReference<KinematicCharacterController>> _charactersById = [];
     private readonly Dictionary<BodyPair, int> _disabledCollisionPairs = [];
-    private readonly Dictionary<BodyPair, ContactData> _currentContacts = [];
-    private readonly Dictionary<BodyPair, ContactData> _previousContacts = [];
+    private Dictionary<BodyPair, ContactData> _currentContacts = [];
+    private Dictionary<BodyPair, ContactData> _previousContacts = [];
+    private PhysicsContact[] _contactArena = [];
+    private int _contactArenaUsed;
     private readonly Dictionary<RigidBody, DelayedWorldTransform> _delayedWorldTransforms = [];
     private readonly BroadPhaseLayerInterfaceMask _broadPhaseLayerInterface;
     private readonly PhysicsObjectLayerPairFilter _objectLayerPairFilter;
@@ -127,6 +130,10 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
         }
         _bodiesById.Clear();
         _charactersById.Clear();
+        _currentContacts.Clear();
+        _previousContacts.Clear();
+        _contactArena = [];
+        _contactArenaUsed = 0;
         _debugRenderer = null;
         World.SetContactListener(null!);
         _raycastBroadPhaseLayerFilter.Dispose();
@@ -697,23 +704,17 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
 
     internal void DisableCollision(uint body1, uint body2)
     {
-        lock (_contactLock)
-        {
-            var pair = new BodyPair(body1, body2);
-            _disabledCollisionPairs[pair] = _disabledCollisionPairs.GetValueOrDefault(pair) + 1;
-        }
+        var pair = new BodyPair(body1, body2);
+        _disabledCollisionPairs[pair] = _disabledCollisionPairs.GetValueOrDefault(pair) + 1;
     }
 
     internal void EnableCollision(uint body1, uint body2)
     {
-        lock (_contactLock)
-        {
-            var pair = new BodyPair(body1, body2);
-            if (!_disabledCollisionPairs.TryGetValue(pair, out var count) || count <= 1)
-                _disabledCollisionPairs.Remove(pair);
-            else
-                _disabledCollisionPairs[pair] = count - 1;
-        }
+        var pair = new BodyPair(body1, body2);
+        if (!_disabledCollisionPairs.TryGetValue(pair, out var count) || count <= 1)
+            _disabledCollisionPairs.Remove(pair);
+        else
+            _disabledCollisionPairs[pair] = count - 1;
     }
 
     internal void RegisterBody(uint bodyId, RigidBody body)
@@ -771,8 +772,8 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
 
     private void SimulateStep(float timeStep)
     {
-        lock (_contactLock)
-            _currentContacts.Clear();
+        _currentContacts.Clear();
+        _contactArenaUsed = 0;
 
         for (var i = _rigidBodies.Count - 1; i >= 0; --i)
         {
@@ -858,8 +859,18 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
         var id1 = body1.GetID();
         var id2 = body2.GetID();
         var pair = new BodyPair(id1, id2);
-        var character1 = GetCharacter(id1);
-        var character2 = GetCharacter(id2);
+        // Match rbfx: contact normals point from body 2 toward body 1.
+        var normal = -manifold.MWorldSpaceNormal;
+        if (pair.Body1 != id1)
+            normal = -normal;
+
+        var pointCount = manifold.MRelativeContactPointsOn1.Count;
+        if (pointCount == 0)
+            return;
+        var body1Sensor = body1.IsSensor();
+        var body2Sensor = body2.IsSensor();
+        var character1 = FindCharacter(id1);
+        var character2 = FindCharacter(id2);
         if (character1?.IsTrigger == true)
         {
             if (character2 is not null)
@@ -875,148 +886,173 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
             settings.MInvMassScale1 = 0.0f;
             settings.MInvInertiaScale1 = 0.0f;
         }
-        // Match rbfx: contact normals point from body 2 toward body 1.
-        var normal = -manifold.MWorldSpaceNormal;
-        if (pair.Body1 != id1)
-            normal = -normal;
-
-        var pointCount = manifold.MRelativeContactPointsOn1.Count;
-        if (pointCount == 0)
-            return;
-        var contacts = new PhysicsContact[pointCount];
-        for (var i = 0; i < pointCount; ++i)
-        {
-            contacts[i] = new PhysicsContact
-            {
-                // Match rbfx's manifold event payload, which reports the point on shape 2.
-                Position = manifold.GetWorldSpaceContactPointOn2(checked((uint)i)),
-                Normal = normal,
-                Distance = -manifold.MPenetrationDepth,
-                Impulse = 0.0f
-            };
-        }
-
-        var contact = new ContactData(
-            pair,
-            settings.MIsSensor || body1.IsSensor() || body2.IsSensor(),
-            GetCharacter(id1) is not null && body2.IsSensor() ||
-                GetCharacter(id2) is not null && body1.IsSensor(),
-            contacts);
+        var trigger = settings.MIsSensor || body1Sensor || body2Sensor;
+        var characterTrigger = character1 is not null && body2Sensor ||
+            character2 is not null && body1Sensor;
+        // Jolt may enter this callback concurrently for different body pairs.
         lock (_contactLock)
         {
-            if (_currentContacts.TryGetValue(pair, out var existing))
+            var hasExisting = _currentContacts.TryGetValue(pair, out var existing);
+            var contactCount = hasExisting ? existing.ContactCount : 0;
+            var contactCapacity = hasExisting ? existing.ContactCapacity : 0;
+            var contactOffset = hasExisting ? existing.ContactOffset : 0;
+            var required = contactCount + pointCount;
+            if (!hasExisting || required > contactCapacity)
             {
-                var combined = new PhysicsContact[existing.Contacts.Length + contacts.Length];
-                existing.Contacts.CopyTo(combined, 0);
-                contacts.CopyTo(combined, existing.Contacts.Length);
+                contactCapacity = hasExisting
+                    ? SystemMath.Max(required, contactCapacity * 2)
+                    : pointCount;
+                contactOffset = AllocateContactBlock(contactCapacity);
+                if (hasExisting)
+                {
+                    Array.Copy(_contactArena, existing.ContactOffset,
+                        _contactArena, contactOffset, existing.ContactCount);
+                }
+            }
+            for (var i = 0; i < pointCount; ++i)
+            {
+                _contactArena[contactOffset + contactCount + i] = new PhysicsContact
+                {
+                    // Match rbfx's manifold event payload, which reports the point on shape 2.
+                    Position = manifold.GetWorldSpaceContactPointOn2(checked((uint)i)),
+                    Normal = normal,
+                    Distance = -manifold.MPenetrationDepth,
+                    Impulse = 0.0f
+                };
+            }
+            contactCount = required;
+
+            var contact = new ContactData(
+                pair,
+                trigger,
+                characterTrigger,
+                contactOffset,
+                contactCount,
+                contactCapacity);
+            if (hasExisting)
+            {
                 contact = contact with
                 {
                     Trigger = existing.Trigger || contact.Trigger,
-                    CharacterTrigger = existing.CharacterTrigger || contact.CharacterTrigger,
-                    Contacts = combined
+                    CharacterTrigger = existing.CharacterTrigger || contact.CharacterTrigger
                 };
             }
             _currentContacts[pair] = contact;
         }
     }
 
+    private int AllocateContactBlock(int capacity)
+    {
+        var offset = _contactArenaUsed;
+        var required = checked(offset + capacity);
+        if (_contactArena.Length < required)
+        {
+            var arenaCapacity = _contactArena.Length == 0
+                ? required
+                : SystemMath.Max(required, _contactArena.Length * 2);
+            Array.Resize(ref _contactArena, arenaCapacity);
+        }
+        _contactArenaUsed = required;
+        return offset;
+    }
+
     private void SendCollisionEvents()
     {
-        lock (_contactLock)
+        foreach (var (pair, contact) in _currentContacts)
         {
-            foreach (var (pair, contact) in _currentContacts)
+            if (TrySendCharacterTriggerEvent(pair, contact, _previousContacts.GetValueOrDefault(pair)))
+                continue;
+            var bodyA = GetBody(pair.Body1);
+            var bodyB = GetBody(pair.Body2);
+            if (bodyA is null || bodyB is null || !ShouldSignal(bodyA, bodyB))
+                continue;
+            var nodeA = bodyA.TryGetNode();
+            var nodeB = bodyB.TryGetNode();
+            if (nodeA is null || nodeB is null)
+                continue;
+            var isNew = !_previousContacts.ContainsKey(pair);
+            var eventContacts = new ArraySegment<PhysicsContact>(
+                _contactArena, contact.ContactOffset, contact.ContactCount);
+            if (isNew)
             {
-                if (TrySendCharacterTriggerEvent(pair, contact, _previousContacts.GetValueOrDefault(pair)))
-                    continue;
-                var bodyA = GetBody(pair.Body1);
-                var bodyB = GetBody(pair.Body2);
-                if (bodyA is null || bodyB is null || !ShouldSignal(bodyA, bodyB))
-                    continue;
-                var nodeA = bodyA.TryGetNode();
-                var nodeB = bodyB.TryGetNode();
-                if (nodeA is null || nodeB is null)
-                    continue;
-                var isNew = !_previousContacts.ContainsKey(pair);
-                if (isNew)
-                {
-                    var start = new PhysicsEvents.PhysicsCollisionStartEvent
-                    {
-                        World = this, NodeA = nodeA, NodeB = nodeB, BodyA = bodyA, BodyB = bodyB,
-                        Trigger = contact.Trigger, Contacts = contact.Contacts
-                    };
-                    SendEvent(ref start);
-                }
-
-                if (bodyA.TryGetNode() is null || bodyB.TryGetNode() is null)
-                    continue;
-                var ongoing = new PhysicsEvents.PhysicsCollisionEvent
+                var start = new PhysicsEvents.PhysicsCollisionStartEvent
                 {
                     World = this, NodeA = nodeA, NodeB = nodeB, BodyA = bodyA, BodyB = bodyB,
-                    Trigger = contact.Trigger, Contacts = contact.Contacts
+                    Trigger = contact.Trigger,
+                    Contacts = eventContacts
                 };
-                SendEvent(ref ongoing);
-                SendNodeCollisionEvents(bodyA, nodeA, bodyB, nodeB, contact, isNew);
-                if (bodyA.TryGetNode() is not null && bodyB.TryGetNode() is not null)
-                {
-                    var flippedContacts = new PhysicsContact[contact.Contacts.Length];
-                    for (var i = 0; i < contact.Contacts.Length; ++i)
-                    {
-                        flippedContacts[i] = contact.Contacts[i];
-                        flippedContacts[i].Normal = -flippedContacts[i].Normal;
-                    }
-                    var flipped = contact with { Contacts = flippedContacts };
-                    SendNodeCollisionEvents(bodyB, nodeB, bodyA, nodeA, flipped, isNew);
-                }
+                SendEvent(ref start);
             }
 
-            foreach (var (pair, contact) in _previousContacts)
+            if (bodyA.TryGetNode() is null || bodyB.TryGetNode() is null)
+                continue;
+            var ongoing = new PhysicsEvents.PhysicsCollisionEvent
             {
-                if (_currentContacts.ContainsKey(pair))
-                    continue;
-                if (TrySendCharacterTriggerEvent(pair, default, contact))
-                    continue;
-                var bodyA = GetBody(pair.Body1);
-                var bodyB = GetBody(pair.Body2);
-                if (bodyA is null || bodyB is null || !ShouldSignal(bodyA, bodyB))
-                    continue;
-                var nodeA = bodyA.TryGetNode();
-                var nodeB = bodyB.TryGetNode();
-                if (nodeA is null || nodeB is null)
-                    continue;
-                var end = new PhysicsEvents.PhysicsCollisionEndEvent
-                {
-                    World = this, NodeA = nodeA, NodeB = nodeB, BodyA = bodyA, BodyB = bodyB, Trigger = contact.Trigger
-                };
-                SendEvent(ref end);
-                var nodeEndA = new PhysicsEvents.NodeCollisionEndEvent
-                {
-                    Body = bodyA, OtherNode = nodeB, OtherBody = bodyB, Trigger = contact.Trigger
-                };
-                nodeA.SendEvent(ref nodeEndA);
-                if (bodyA.TryGetNode() is null || bodyB.TryGetNode() is null)
-                    continue;
-                var nodeEndB = new PhysicsEvents.NodeCollisionEndEvent
-                {
-                    Body = bodyB, OtherNode = nodeA, OtherBody = bodyA, Trigger = contact.Trigger
-                };
-                nodeB.SendEvent(ref nodeEndB);
+                World = this, NodeA = nodeA, NodeB = nodeB, BodyA = bodyA, BodyB = bodyB,
+                Trigger = contact.Trigger,
+                Contacts = eventContacts
+            };
+            SendEvent(ref ongoing);
+            SendNodeCollisionEvents(bodyA, nodeA, bodyB, nodeB, contact, isNew, eventContacts);
+            if (bodyA.TryGetNode() is not null && bodyB.TryGetNode() is not null)
+            {
+                for (var i = 0; i < contact.ContactCount; ++i)
+                    _contactArena[contact.ContactOffset + i].Normal =
+                        -_contactArena[contact.ContactOffset + i].Normal;
+                SendNodeCollisionEvents(bodyB, nodeB, bodyA, nodeA, contact, isNew, eventContacts);
+                for (var i = 0; i < contact.ContactCount; ++i)
+                    _contactArena[contact.ContactOffset + i].Normal =
+                        -_contactArena[contact.ContactOffset + i].Normal;
             }
-
-            _previousContacts.Clear();
-            foreach (var pair in _currentContacts)
-                _previousContacts.Add(pair.Key, pair.Value);
         }
+
+        foreach (var (pair, contact) in _previousContacts)
+        {
+            if (_currentContacts.ContainsKey(pair))
+                continue;
+            if (TrySendCharacterTriggerEvent(pair, default, contact))
+                continue;
+            var bodyA = GetBody(pair.Body1);
+            var bodyB = GetBody(pair.Body2);
+            if (bodyA is null || bodyB is null || !ShouldSignal(bodyA, bodyB))
+                continue;
+            var nodeA = bodyA.TryGetNode();
+            var nodeB = bodyB.TryGetNode();
+            if (nodeA is null || nodeB is null)
+                continue;
+            var end = new PhysicsEvents.PhysicsCollisionEndEvent
+            {
+                World = this, NodeA = nodeA, NodeB = nodeB, BodyA = bodyA, BodyB = bodyB, Trigger = contact.Trigger
+            };
+            SendEvent(ref end);
+            var nodeEndA = new PhysicsEvents.NodeCollisionEndEvent
+            {
+                Body = bodyA, OtherNode = nodeB, OtherBody = bodyB, Trigger = contact.Trigger
+            };
+            nodeA.SendEvent(ref nodeEndA);
+            if (bodyA.TryGetNode() is null || bodyB.TryGetNode() is null)
+                continue;
+            var nodeEndB = new PhysicsEvents.NodeCollisionEndEvent
+            {
+                Body = bodyB, OtherNode = nodeA, OtherBody = bodyA, Trigger = contact.Trigger
+            };
+            nodeB.SendEvent(ref nodeEndB);
+        }
+
+        (_currentContacts, _previousContacts) = (_previousContacts, _currentContacts);
     }
 
     private static void SendNodeCollisionEvents(
-        RigidBody body, Node node, RigidBody otherBody, Node otherNode, ContactData contact, bool isNew)
+        RigidBody body, Node node, RigidBody otherBody, Node otherNode, ContactData contact, bool isNew,
+        ArraySegment<PhysicsContact> contacts)
     {
         if (isNew)
         {
             var start = new PhysicsEvents.NodeCollisionStartEvent
             {
                 Body = body, OtherNode = otherNode, OtherBody = otherBody,
-                Trigger = contact.Trigger, Contacts = contact.Contacts
+                Trigger = contact.Trigger,
+                Contacts = contacts
             };
             node.SendEvent(ref start);
         }
@@ -1025,7 +1061,8 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
         var ongoing = new PhysicsEvents.NodeCollisionEvent
         {
             Body = body, OtherNode = otherNode, OtherBody = otherBody,
-            Trigger = contact.Trigger, Contacts = contact.Contacts
+            Trigger = contact.Trigger,
+            Contacts = contacts
         };
         node.SendEvent(ref ongoing);
     }
@@ -1048,6 +1085,12 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
             return character;
         _charactersById.Remove(bodyId);
         return null;
+    }
+
+    private KinematicCharacterController? FindCharacter(uint bodyId)
+    {
+        return _charactersById.TryGetValue(bodyId, out var weakCharacter) &&
+            weakCharacter.TryGetTarget(out var character) ? character : null;
     }
 
     private bool TrySendCharacterTriggerEvent(BodyPair pair, ContactData current, ContactData previous)
@@ -1117,8 +1160,8 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
 
     private bool IsCollisionDisabled(uint body1, uint body2)
     {
-        lock (_contactLock)
-            return _disabledCollisionPairs.ContainsKey(new BodyPair(body1, body2));
+        // The filter is configured before/after simulation; callbacks only read it concurrently.
+        return _disabledCollisionPairs.ContainsKey(new BodyPair(body1, body2));
     }
 
     private static void AcquireJolt()
@@ -1162,7 +1205,8 @@ public partial class PhysicsWorld : Component, IPhysicsWorld3D
     }
 
     private readonly record struct ContactData(
-        BodyPair Pair, bool Trigger, bool CharacterTrigger, PhysicsContact[] Contacts);
+        BodyPair Pair, bool Trigger, bool CharacterTrigger,
+        int ContactOffset, int ContactCount, int ContactCapacity);
     private readonly record struct SynchronizedStep(long NetworkFrame, uint Offset);
 
     private sealed class PhysicsContactListener : ContactListener
