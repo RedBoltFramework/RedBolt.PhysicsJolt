@@ -139,7 +139,7 @@ endif()
 
 if(NOT EMSCRIPTEN)
     file(GENERATE
-        OUTPUT "${REDBOLT_GENERATED_ROOT}/native-modules/$<CONFIG>/JOLT.json"
+        OUTPUT "${REDBOLT_GENERATED_ROOT}/native-modules/JOLT.json"
         CONTENT "{\n  \"module\": \"JOLT\",\n  \"managedSelector\": \"RedBolt.Bindings.Jolt\",\n  \"nativeLibrary\": \"RedBolt.Native.Jolt\",\n  \"requires\": [],\n  \"requirementClosure\": [],\n  \"artifacts\": [\"$<TARGET_FILE_NAME:redbolt-physics-jolt-native-jolt>\"]\n}\n")
 endif()
 
