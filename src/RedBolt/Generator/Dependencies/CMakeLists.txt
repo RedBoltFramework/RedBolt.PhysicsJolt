@@ -10,15 +10,6 @@ if(NOT REDBOLT_DEPENDENCIES_GENERATOR_DLL)
         CACHE FILEPATH "RedBolt.PhysicsJolt dependency generator assembly")
 endif()
 
-file(GLOB_RECURSE REDBOLT_SHARPCPP_GENERATOR_INPUTS CONFIGURE_DEPENDS
-    "${REDBOLT_SHARPCPP_ROOT}/src/SharpCpp.Model/*.cs"
-    "${REDBOLT_SHARPCPP_ROOT}/src/SharpCpp.Metadata/*.cs"
-    "${REDBOLT_SHARPCPP_ROOT}/src/SharpCpp.Parsing/*.cs"
-    "${REDBOLT_SHARPCPP_ROOT}/src/SharpCpp.Pipeline/*.cs"
-    "${REDBOLT_SHARPCPP_ROOT}/src/SharpCpp.Rendering/*.cs"
-    "${REDBOLT_SHARPCPP_ROOT}/src/SharpCpp.Support/*.cs"
-    "${REDBOLT_SHARPCPP_ROOT}/include/SharpCpp/*.h"
-    "${REDBOLT_SHARPCPP_ROOT}/include/SharpCpp/*.hpp")
 file(GLOB_RECURSE REDBOLT_DEPENDENCIES_GENERATOR_INPUTS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cs"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.csproj")
