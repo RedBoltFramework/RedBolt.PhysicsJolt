@@ -81,8 +81,9 @@ internal sealed class JoltGenerator(string nativeLibraryName)
 
     // JPH::Vec3 is 16-byte SIMD natively but projects to the 12-byte JoltVector3Abi
     // (JoltMarshallers.hpp), and likewise JPH::Vec4 (16-byte aligned) projects to the 4-byte
-    // aligned JoltVector4Abi and JPH::DVec3 (32 bytes) to the 24-byte JoltDVector3Abi, so a raw
-    // Vec3/Vec4/DVec3 pointer cannot be reinterpret_cast between the two
+    // aligned JoltVector4Abi, JPH::DVec3 (32 bytes) to the 24-byte JoltDVector3Abi, JPH::UVec4 to
+    // the 4-byte aligned JoltUVector4Abi and JPH::DMat44 (SIMD columns) to JoltDMatrix4Abi, so a raw
+    // Vec3/Vec4/DVec3/UVec4/DMat44 pointer cannot be reinterpret_cast between the two
     // layouts the way the generic Marshaller<const T*> fallback requires; that fallback
     // static_asserts on exactly this mismatch. Jolt uses such pointers for arrays
     // (ConvexHullShapeSettings inPoints, MotionProperties::ResetSleepTestSpheres), so a
@@ -90,7 +91,7 @@ internal sealed class JoltGenerator(string nativeLibraryName)
     // ProjectedValue(Const)ReferenceMarshallerBase, and array overloads (JPH::Array<Vec3>) remain.
     //
     // Float4*/Double3* are layout-compatible with their ABI structs and stay bound through the
-    // generic pointer fallback. Every function with a Vec3/RVec3/Vec4/DVec3 pointer parameter is
+    // generic pointer fallback. Every function with a Vec3/RVec3/Vec4/DVec3/UVec4/DMat44 pointer parameter is
     // therefore ignored by default. The one
     // exception is SimdVectorOutputArrays, an explicit allow-list of fixed-size output arrays
     // keyed by qualified function name and parameter name. A mutable Vec3* binds as
@@ -104,7 +105,9 @@ internal sealed class JoltGenerator(string nativeLibraryName)
         "JPH::Vec3",
         "JPH::RVec3",
         "JPH::Vec4",
-        "JPH::DVec3"
+        "JPH::DVec3",
+        "JPH::UVec4",
+        "JPH::DMat44"
     };
 
     private static readonly Dictionary<string, Dictionary<string, int>> SimdVectorOutputArrays =
@@ -130,7 +133,7 @@ internal sealed class JoltGenerator(string nativeLibraryName)
                 continue;
 
             function.SetIgnoreReason(
-                "raw Vec3/Vec4/DVec3 pointer is an array whose native SIMD layout does not match " +
+                "raw Vec3/Vec4/DVec3/UVec4/DMat44 pointer is an array whose native SIMD layout does not match " +
                 "the projected Jolt*Abi struct; use the JPH::Array overload instead");
         }
     }

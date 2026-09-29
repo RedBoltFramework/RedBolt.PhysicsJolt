@@ -20,7 +20,9 @@
 #include <Jolt/Math/Double3.h>
 #include <Jolt/Math/Float3.h>
 #include <Jolt/Math/Float4.h>
+#include <Jolt/Math/DMat44.h>
 #include <Jolt/Math/Mat44.h>
+#include <Jolt/Math/UVec4.h>
 #include <Jolt/Math/Quat.h>
 #include <Jolt/Math/Vec4.h>
 #include <Jolt/Physics/Body/BodyID.h>
@@ -110,6 +112,25 @@ struct JoltDVector3Abi
     double x;
     double y;
     double z;
+};
+
+// Layout mirrors RedBolt.Bindings.Jolt.JoltUInt4.
+struct JoltUVector4Abi
+{
+    uint32_t x;
+    uint32_t y;
+    uint32_t z;
+    uint32_t w;
+};
+
+// Layout mirrors RedBolt.Bindings.Jolt.JoltDMatrix4: the three rotation/scale columns of a
+// DMat44 (Vec4, w unused by DMat44) followed by its double-precision translation.
+struct JoltDMatrix4Abi
+{
+    JoltVector4Abi column0;
+    JoltVector4Abi column1;
+    JoltVector4Abi column2;
+    JoltDVector3Abi translation;
 };
 
 struct JoltQuaternionAbi
@@ -217,6 +238,27 @@ inline JoltDVector3Abi ToAbi(const JPH::Double3& value) noexcept
 inline JPH::Double3 ToDouble3Cpp(const JoltDVector3Abi& value) noexcept
 {
     return {value.x, value.y, value.z};
+}
+
+inline JoltUVector4Abi ToAbi(JPH::UVec4Arg value) noexcept
+{
+    return {value.GetX(), value.GetY(), value.GetZ(), value.GetW()};
+}
+
+inline JPH::UVec4 ToCpp(const JoltUVector4Abi& value) noexcept
+{
+    return {value.x, value.y, value.z, value.w};
+}
+
+inline JoltDMatrix4Abi ToAbi(JPH::DMat44Arg value) noexcept
+{
+    return {ToAbi(value.GetColumn4(0)), ToAbi(value.GetColumn4(1)), ToAbi(value.GetColumn4(2)),
+            ToAbi(value.GetTranslation())};
+}
+
+inline JPH::DMat44 ToCpp(const JoltDMatrix4Abi& value) noexcept
+{
+    return {ToCpp(value.column0), ToCpp(value.column1), ToCpp(value.column2), ToCpp(value.translation)};
 }
 
 inline JoltMatrix4Abi ToAbi(JPH::Mat44Arg value) noexcept
@@ -401,6 +443,47 @@ struct Marshaller<const JPH::Double3&> : ProjectedValueConstReferenceMarshallerB
 
 template <>
 struct Marshaller<JPH::Double3&> : ProjectedValueReferenceMarshallerBase<JPH::Double3> {};
+
+// UVec4 and DMat44 project to handwritten blittable structs (JoltValueTypes.cs) whose managed
+// layout is identical to the scalar ABI structs, so no managed marshaller is needed. Raw
+// pointers to UVec4/DMat44 are ignored by JoltGenerator; see SimdVectorPointees.
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Bindings.Jolt.JoltUInt4",
+    suppress_emission = true
+)]] Marshaller<JPH::UVec4>
+{
+    using cpp_type = JPH::UVec4;
+    using abi_type = JoltUVector4Abi;
+
+    abi_type ConvertToAbi(cpp_type value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToCpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::UVec4&> : ProjectedValueConstReferenceMarshallerBase<JPH::UVec4> {};
+
+template <>
+struct Marshaller<JPH::UVec4&> : ProjectedValueReferenceMarshallerBase<JPH::UVec4> {};
+
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Bindings.Jolt.JoltDMatrix4",
+    suppress_emission = true
+)]] Marshaller<JPH::DMat44>
+{
+    using cpp_type = JPH::DMat44;
+    using abi_type = JoltDMatrix4Abi;
+
+    abi_type ConvertToAbi(const cpp_type& value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToCpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::DMat44&> : ProjectedValueConstReferenceMarshallerBase<JPH::DMat44> {};
+
+template <>
+struct Marshaller<JPH::DMat44&> : ProjectedValueReferenceMarshallerBase<JPH::DMat44> {};
 
 template <>
 struct [[sharpcpp::managed_type(
