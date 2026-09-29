@@ -6,6 +6,7 @@ namespace RedBolt.Generator.Dependencies;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using SharpCpp.Model.Ast;
 
@@ -75,6 +76,42 @@ internal sealed class JoltGenerator(string nativeLibraryName)
             SimdStorageRecords,
             "SIMD storage type differs between the generator parse and the native build");
         IgnoreRecordTree(compilation, InternalRecords, "internal PhysicsSystem job state");
+        IgnoreSimdVectorPointerFunctions(compilation);
+    }
+
+    // JPH::Vec3 is 16-byte SIMD natively but projects to the 12-byte JoltVector3Abi
+    // (JoltMarshallers.hpp), so a raw Vec3 pointer cannot be reinterpret_cast between the two
+    // layouts the way the generic Marshaller<const T*> fallback requires; that fallback
+    // static_asserts on exactly this mismatch. Jolt uses such pointers for arrays
+    // (ConvexHullShapeSettings inPoints, MotionProperties::ResetSleepTestSpheres), so a
+    // single-element pointer marshaller would be wrong too. Vec3&/const Vec3& stay bound through
+    // ProjectedValue(Const)ReferenceMarshallerBase, and array overloads (JPH::Array<Vec3>) remain.
+    private static readonly HashSet<string> SimdVectorPointees = new(StringComparer.Ordinal)
+    {
+        "JPH::Vec3",
+        "JPH::RVec3"
+    };
+
+    private static void IgnoreSimdVectorPointerFunctions(BindingCompilation compilation)
+    {
+        foreach (var function in compilation.Functions.Where(static function =>
+            function.Parameters.Any(static parameter => IsSimdVectorPointer(parameter.CppTypeName))))
+        {
+            function.SetIgnoreReason(
+                "raw Vec3 pointer is an array whose native SIMD layout does not match the " +
+                "projected JoltVector3Abi; use the JPH::Array<Vec3> overload instead");
+        }
+    }
+
+    private static bool IsSimdVectorPointer(string cppTypeName)
+    {
+        var name = cppTypeName.Trim();
+        if (!name.EndsWith('*'))
+            return false;
+        name = name.TrimEnd('*').Trim();
+        if (name.StartsWith("const ", StringComparison.Ordinal))
+            name = name["const ".Length..].Trim();
+        return SimdVectorPointees.Contains(name);
     }
 
     protected override IEnumerable<string> GetAdditionalMarshallerHeaders(GeneratorOptions options)
