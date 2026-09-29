@@ -211,32 +211,32 @@ internal sealed class JoltRaycastVehicle : IDisposable
     {
         if (!HasWheel(index))
             return Vector3f.Zero;
-        using var transform = GetWheelWorldTransform(index);
-        return transform.GetTranslation();
+        var transform = GetWheelWorldTransform(index);
+        return transform.Translation;
     }
 
     internal Quaternion GetWheelRotation(uint index)
     {
         if (!HasWheel(index))
             return Quaternion.IDENTITY;
-        using var transform = GetWheelWorldTransform(index);
-        return transform.GetQuaternion();
+        var transform = GetWheelWorldTransform(index);
+        return transform.Rotation;
     }
 
     internal Vector3f GetWheelLocalPosition(uint index)
     {
         if (!HasWheel(index))
             return Vector3f.Zero;
-        using var transform = GetWheelLocalTransform(index);
-        return transform.GetTranslation();
+        var transform = GetWheelLocalTransform(index);
+        return transform.Translation;
     }
 
     internal Quaternion GetWheelLocalRotation(uint index)
     {
         if (!HasWheel(index))
             return Quaternion.IDENTITY;
-        using var transform = GetWheelLocalTransform(index);
-        return transform.GetQuaternion();
+        var transform = GetWheelLocalTransform(index);
+        return transform.Rotation;
     }
 
     internal bool IsWheelInContact(uint index) => HasWheel(index) && _vehicle!.GetWheel(index).HasContact();
@@ -312,10 +312,10 @@ internal sealed class JoltRaycastVehicle : IDisposable
         return radius != float.MaxValue ? MathF.Max(0.01f, radius) : 0.01f;
     }
 
-    private Mat44 GetWheelWorldTransform(uint index) =>
+    private Matrix4 GetWheelWorldTransform(uint index) =>
         _vehicle!.GetWheelWorldTransform(index, -Vector3f.Right, Vector3f.Up);
 
-    private Mat44 GetWheelLocalTransform(uint index) =>
+    private Matrix4 GetWheelLocalTransform(uint index) =>
         _vehicle!.GetWheelLocalTransform(index, -Vector3f.Right, Vector3f.Up);
 
     private sealed class NativePhysicsStepListener(nint handle) : PhysicsStepListener(handle)

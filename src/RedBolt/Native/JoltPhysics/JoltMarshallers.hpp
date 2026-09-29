@@ -16,6 +16,8 @@
 #include <Jolt/Core/Mutex.h>
 #include <Jolt/Core/Reference.h>
 #include <Jolt/Core/StaticArray.h>
+#include <Jolt/Math/Float3.h>
+#include <Jolt/Math/Mat44.h>
 #include <Jolt/Math/Quat.h>
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
@@ -105,6 +107,17 @@ struct JoltRayAbi
     JoltVector3Abi direction;
 };
 
+// Row-major layout matching RedBolt.Math.Matrix4's field order (M00..M03, M10..M13, ...).
+// Jolt's Mat44 is stored as 4 SIMD column vectors, so every element here must be read/written
+// through Jolt's scalar accessors (GetColumn4/sLoadFloat4x4), never by copying the SIMD storage.
+struct JoltMatrix4Abi
+{
+    float m00, m01, m02, m03;
+    float m10, m11, m12, m13;
+    float m20, m21, m22, m23;
+    float m30, m31, m32, m33;
+};
+
 struct JoltRayCastResultAbi
 {
     uint32_t bodyId;
@@ -130,6 +143,45 @@ inline JoltQuaternionAbi ToAbi(JPH::QuatArg value) noexcept
 inline JPH::Quat ToCpp(const JoltQuaternionAbi& value) noexcept
 {
     return {value.x, value.y, value.z, value.w};
+}
+
+inline JoltVector3Abi ToAbi(const JPH::Float3& value) noexcept
+{
+    return {value.x, value.y, value.z};
+}
+
+// Named distinctly from ToCpp(const JoltVector3Abi&) above: both share the same ABI parameter
+// type, and C++ cannot overload on return type alone (JPH::Vec3 vs JPH::Float3).
+inline JPH::Float3 ToFloat3Cpp(const JoltVector3Abi& value) noexcept
+{
+    return {value.x, value.y, value.z};
+}
+
+inline JoltMatrix4Abi ToAbi(JPH::Mat44Arg value) noexcept
+{
+    // Each column is a SIMD Vec4; extract its scalar rows via the accessors rather than
+    // reinterpreting the SIMD storage, then scatter them into row-major ABI slots.
+    JPH::Vec4 col0 = value.GetColumn4(0);
+    JPH::Vec4 col1 = value.GetColumn4(1);
+    JPH::Vec4 col2 = value.GetColumn4(2);
+    JPH::Vec4 col3 = value.GetColumn4(3);
+    return {
+        col0.GetX(), col1.GetX(), col2.GetX(), col3.GetX(),
+        col0.GetY(), col1.GetY(), col2.GetY(), col3.GetY(),
+        col0.GetZ(), col1.GetZ(), col2.GetZ(), col3.GetZ(),
+        col0.GetW(), col1.GetW(), col2.GetW(), col3.GetW()};
+}
+
+inline JPH::Mat44 ToCpp(const JoltMatrix4Abi& value) noexcept
+{
+    // Reassemble as 4 column Float4s (row values across each column) and load through
+    // sLoadFloat4x4, which is the accessor-based way to populate the SIMD column storage.
+    const JPH::Float4 columns[4] = {
+        JPH::Float4(value.m00, value.m10, value.m20, value.m30),
+        JPH::Float4(value.m01, value.m11, value.m21, value.m31),
+        JPH::Float4(value.m02, value.m12, value.m22, value.m32),
+        JPH::Float4(value.m03, value.m13, value.m23, value.m33)};
+    return JPH::Mat44::sLoadFloat4x4(columns);
 }
 
 template <>
@@ -170,6 +222,49 @@ struct Marshaller<const JPH::Quat&> : ProjectedValueConstReferenceMarshallerBase
 
 template <>
 struct Marshaller<JPH::Quat&> : ProjectedValueReferenceMarshallerBase<JPH::Quat> {};
+
+// Float3 is deliberately projected to its own RedBolt.Math.Float3 type rather than reusing
+// BaseRealVector3<float> (Vec3's projection). Vec3 is 16-byte-aligned SIMD storage while Float3
+// is a tightly packed 12-byte POD; JPH::Array<Vec3> and JPH::Array<Float3> are distinct native
+// collections with different element strides, and SharpCpp's generic Array<T> dispatches to the
+// correct native entry points by the managed element type, so the two must stay distinct C# types.
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Math.Float3",
+    suppress_emission = true
+)]] Marshaller<JPH::Float3>
+{
+    using cpp_type = JPH::Float3;
+    using abi_type = JoltVector3Abi;
+
+    abi_type ConvertToAbi(cpp_type value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToFloat3Cpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::Float3&> : ProjectedValueConstReferenceMarshallerBase<JPH::Float3> {};
+
+template <>
+struct Marshaller<JPH::Float3&> : ProjectedValueReferenceMarshallerBase<JPH::Float3> {};
+
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Math.Matrix4",
+    suppress_emission = true
+)]] Marshaller<JPH::Mat44>
+{
+    using cpp_type = JPH::Mat44;
+    using abi_type = JoltMatrix4Abi;
+
+    abi_type ConvertToAbi(const cpp_type& value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToCpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::Mat44&> : ProjectedValueConstReferenceMarshallerBase<JPH::Mat44> {};
+
+template <>
+struct Marshaller<JPH::Mat44&> : ProjectedValueReferenceMarshallerBase<JPH::Mat44> {};
 
 template <>
 struct [[sharpcpp::managed_type(

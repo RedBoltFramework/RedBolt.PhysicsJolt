@@ -47,10 +47,7 @@ internal static class JoltShapeFactory
     {
         using var nativeVertices = new global::JPH.Array<Float3>();
         for (var i = 0; i < vertices.Length; ++i)
-        {
-            using var vertex = new Float3(vertices[i].X, vertices[i].Y, vertices[i].Z);
-            nativeVertices.Add(vertex);
-        }
+            nativeVertices.Add(vertices[i]);
 
         using var triangles = new global::JPH.Array<IndexedTriangle>();
         for (var i = 0; i + 2 < indices.Length; i += 3)

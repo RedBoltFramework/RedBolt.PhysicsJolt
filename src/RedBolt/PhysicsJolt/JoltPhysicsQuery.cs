@@ -84,8 +84,8 @@ internal static class JoltPhysicsQuery
         Vector3f startPosition, Quaternion startRotation, Vector3f direction, uint ignoreBodyId,
         BroadPhaseLayerFilter broadPhaseLayerFilter, ObjectLayerFilter objectLayerFilter, out Hit hit)
     {
-        using var worldTransform = Mat44.SRotationTranslation(startRotation, startPosition);
-        using var centerOfMassTransform = worldTransform.PreTranslated(shape.GetCenterOfMass());
+        var worldTransform = new Matrix4(startRotation, startPosition);
+        var centerOfMassTransform = worldTransform.PreTranslated(shape.GetCenterOfMass());
         using var shapeCast = new RShapeCast(shape, scale, centerOfMassTransform, direction);
         using var settings = new ShapeCastSettings();
         using var collector = new RedBoltClosestCastShapeCollector();
@@ -117,7 +117,7 @@ internal static class JoltPhysicsQuery
         Quaternion rotation, uint ignoreBodyId, BroadPhaseLayerFilter broadPhaseLayerFilter,
         ObjectLayerFilter objectLayerFilter)
     {
-        using var transform = Mat44.SRotationTranslation(rotation, position);
+        var transform = new Matrix4(rotation, position);
         using var settings = new CollideShapeSettings();
         using var collector = new RedBoltAllHitCollideShapeCollector();
         var query = physicsSystem.GetNarrowPhaseQuery();
