@@ -28,6 +28,25 @@ internal sealed class JoltGenerator(string nativeLibraryName)
         "JPH::ObjectLayerPairFilter"
     };
 
+    // The math classes' nested `Type` is their SIMD storage. Generation parses with SSE disabled
+    // (-mno-sse, the BindingTargetGenerator policy that keeps the managed surface target-invariant)
+    // and JoltMarshallers.hpp defines _M_ARM for the parse, so there `Type` is float[4]-style
+    // storage while natively it is __m128 and friends; its members do not exist in the native build.
+    private static readonly HashSet<string> SimdStorageRecords = new(StringComparer.Ordinal)
+    {
+        "JPH::Vec4::Type",
+        "JPH::UVec4::Type",
+        "JPH::DVec3::Type",
+        "JPH::BVec16::Type"
+    };
+
+    // Internal Jolt job state (documented as internal to PhysicsSystem); its nested steps hold
+    // collections of non-copyable atomics. Nested records are ignored with their parent.
+    private static readonly HashSet<string> InternalRecords = new(StringComparer.Ordinal)
+    {
+        "JPH::PhysicsUpdateContext"
+    };
+
     private static readonly IReadOnlyDictionary<string, FixedWidthAliasProjection> FixedWidthAliases =
         new Dictionary<string, FixedWidthAliasProjection>(StringComparer.Ordinal)
         {
@@ -50,6 +69,12 @@ internal sealed class JoltGenerator(string nativeLibraryName)
     protected override void ConfigureBeforeValidation(BindingCompilation compilation)
     {
         FixedWidthAliasNormalizer.Normalize(compilation, FixedWidthAliases);
+
+        IgnoreRecordTree(
+            compilation,
+            SimdStorageRecords,
+            "SIMD storage type differs between the generator parse and the native build");
+        IgnoreRecordTree(compilation, InternalRecords, "internal PhysicsSystem job state");
     }
 
     protected override IEnumerable<string> GetAdditionalMarshallerHeaders(GeneratorOptions options)
@@ -58,4 +83,21 @@ internal sealed class JoltGenerator(string nativeLibraryName)
             options.RedBoltRoot, "src", "RedBolt", "Native", "JoltPhysics", "JoltMarshallers.hpp");
     }
 
+    // Ignores each named record and every record nested inside it.
+    private static void IgnoreRecordTree(
+        BindingCompilation compilation, IReadOnlySet<string> names, string reason)
+    {
+        foreach (var record in compilation.Records)
+        {
+            foreach (var name in names)
+            {
+                if (record.CppQualifiedName == name ||
+                    record.CppQualifiedName.StartsWith(name + "::", StringComparison.Ordinal))
+                {
+                    record.SetIgnoreReason(reason);
+                    break;
+                }
+            }
+        }
+    }
 }
