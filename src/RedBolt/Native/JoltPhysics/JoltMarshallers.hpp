@@ -16,9 +16,13 @@
 #include <Jolt/Core/Mutex.h>
 #include <Jolt/Core/Reference.h>
 #include <Jolt/Core/StaticArray.h>
+#include <Jolt/Math/DVec3.h>
+#include <Jolt/Math/Double3.h>
 #include <Jolt/Math/Float3.h>
+#include <Jolt/Math/Float4.h>
 #include <Jolt/Math/Mat44.h>
 #include <Jolt/Math/Quat.h>
+#include <Jolt/Math/Vec4.h>
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/CastResult.h>
@@ -93,6 +97,21 @@ struct JoltVector3Abi
     float z;
 };
 
+struct JoltVector4Abi
+{
+    float x;
+    float y;
+    float z;
+    float w;
+};
+
+struct JoltDVector3Abi
+{
+    double x;
+    double y;
+    double z;
+};
+
 struct JoltQuaternionAbi
 {
     float w;
@@ -153,6 +172,49 @@ inline JoltVector3Abi ToAbi(const JPH::Float3& value) noexcept
 // Named distinctly from ToCpp(const JoltVector3Abi&) above: both share the same ABI parameter
 // type, and C++ cannot overload on return type alone (JPH::Vec3 vs JPH::Float3).
 inline JPH::Float3 ToFloat3Cpp(const JoltVector3Abi& value) noexcept
+{
+    return {value.x, value.y, value.z};
+}
+
+inline JoltVector4Abi ToAbi(JPH::Vec4Arg value) noexcept
+{
+    return {value.GetX(), value.GetY(), value.GetZ(), value.GetW()};
+}
+
+inline JPH::Vec4 ToCpp(const JoltVector4Abi& value) noexcept
+{
+    return {value.x, value.y, value.z, value.w};
+}
+
+inline JoltVector4Abi ToAbi(const JPH::Float4& value) noexcept
+{
+    return {value.x, value.y, value.z, value.w};
+}
+
+// Named distinctly from ToCpp(const JoltVector4Abi&): same ABI parameter type, different
+// return type (JPH::Vec4 vs JPH::Float4).
+inline JPH::Float4 ToFloat4Cpp(const JoltVector4Abi& value) noexcept
+{
+    return {value.x, value.y, value.z, value.w};
+}
+
+inline JoltDVector3Abi ToAbi(JPH::DVec3Arg value) noexcept
+{
+    return {value.GetX(), value.GetY(), value.GetZ()};
+}
+
+inline JPH::DVec3 ToCpp(const JoltDVector3Abi& value) noexcept
+{
+    return {value.x, value.y, value.z};
+}
+
+inline JoltDVector3Abi ToAbi(const JPH::Double3& value) noexcept
+{
+    return {value.x, value.y, value.z};
+}
+
+// Named distinctly from ToCpp(const JoltDVector3Abi&) for the same reason as ToFloat3Cpp.
+inline JPH::Double3 ToDouble3Cpp(const JoltDVector3Abi& value) noexcept
 {
     return {value.x, value.y, value.z};
 }
@@ -255,6 +317,90 @@ struct Marshaller<const JPH::Float3&> : ProjectedValueConstReferenceMarshallerBa
 
 template <>
 struct Marshaller<JPH::Float3&> : ProjectedValueReferenceMarshallerBase<JPH::Float3> {};
+
+// Vec4/Float4 both project to the blittable RedBolt.Math.Vector4f and DVec3/Double3 to
+// BaseRealVector3<double>, crossing the ABI as scalar structs (JoltVector4Abi/JoltDVector3Abi)
+// filled through the accessors, never by copying the native (SIMD) storage. Raw pointers to the
+// SIMD types (Vec4*, DVec3*) are ignored by JoltGenerator; see SimdVectorPointees.
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Math.Vector4f",
+    managed_marshaller = "global::RedBolt.Math.Vector4fMarshaller",
+    suppress_emission = true
+)]] Marshaller<JPH::Vec4>
+{
+    using cpp_type = JPH::Vec4;
+    using abi_type = JoltVector4Abi;
+
+    abi_type ConvertToAbi(cpp_type value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToCpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::Vec4&> : ProjectedValueConstReferenceMarshallerBase<JPH::Vec4> {};
+
+template <>
+struct Marshaller<JPH::Vec4&> : ProjectedValueReferenceMarshallerBase<JPH::Vec4> {};
+
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Math.Vector4f",
+    managed_marshaller = "global::RedBolt.Math.Vector4fMarshaller",
+    suppress_emission = true
+)]] Marshaller<JPH::Float4>
+{
+    using cpp_type = JPH::Float4;
+    using abi_type = JoltVector4Abi;
+
+    abi_type ConvertToAbi(cpp_type value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToFloat4Cpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::Float4&> : ProjectedValueConstReferenceMarshallerBase<JPH::Float4> {};
+
+template <>
+struct Marshaller<JPH::Float4&> : ProjectedValueReferenceMarshallerBase<JPH::Float4> {};
+
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Math.BaseRealVector3<double>",
+    managed_marshaller = "global::RedBolt.Math.Vector3dMarshaller",
+    suppress_emission = true
+)]] Marshaller<JPH::DVec3>
+{
+    using cpp_type = JPH::DVec3;
+    using abi_type = JoltDVector3Abi;
+
+    abi_type ConvertToAbi(cpp_type value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToCpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::DVec3&> : ProjectedValueConstReferenceMarshallerBase<JPH::DVec3> {};
+
+template <>
+struct Marshaller<JPH::DVec3&> : ProjectedValueReferenceMarshallerBase<JPH::DVec3> {};
+
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::RedBolt.Math.BaseRealVector3<double>",
+    managed_marshaller = "global::RedBolt.Math.Vector3dMarshaller",
+    suppress_emission = true
+)]] Marshaller<JPH::Double3>
+{
+    using cpp_type = JPH::Double3;
+    using abi_type = JoltDVector3Abi;
+
+    abi_type ConvertToAbi(cpp_type value) noexcept { return ToAbi(value); }
+    cpp_type ConvertToCpp(const abi_type& value) noexcept { return ToDouble3Cpp(value); }
+};
+
+template <>
+struct Marshaller<const JPH::Double3&> : ProjectedValueConstReferenceMarshallerBase<JPH::Double3> {};
+
+template <>
+struct Marshaller<JPH::Double3&> : ProjectedValueReferenceMarshallerBase<JPH::Double3> {};
 
 template <>
 struct [[sharpcpp::managed_type(
