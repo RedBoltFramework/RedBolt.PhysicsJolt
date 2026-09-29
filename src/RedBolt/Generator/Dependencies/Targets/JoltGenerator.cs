@@ -86,22 +86,70 @@ internal sealed class JoltGenerator(string nativeLibraryName)
     // (ConvexHullShapeSettings inPoints, MotionProperties::ResetSleepTestSpheres), so a
     // single-element pointer marshaller would be wrong too. Vec3&/const Vec3& stay bound through
     // ProjectedValue(Const)ReferenceMarshallerBase, and array overloads (JPH::Array<Vec3>) remain.
+    //
+    // Every function with a Vec3/RVec3 pointer parameter is therefore ignored by default. The one
+    // exception is SimdVectorOutputArrays, an explicit allow-list of fixed-size output arrays
+    // keyed by qualified function name and parameter name. A mutable Vec3* binds as
+    // Span<BaseRealVector3<float>> through Marshaller<JPH::Vec3*> (JoltMarshallers.hpp), and the
+    // listed minimum length (the number of elements native code writes) is enforced by the
+    // generated wrapper with an ArgumentException. A function is only bound when every Vec3
+    // pointer parameter is mutable and listed; const Vec3* parameters and anything unlisted keep
+    // the whole function ignored. RVec3 is Vec3 because JPH_DOUBLE_PRECISION is not set.
     private static readonly HashSet<string> SimdVectorPointees = new(StringComparer.Ordinal)
     {
         "JPH::Vec3",
         "JPH::RVec3"
     };
 
+    private static readonly Dictionary<string, Dictionary<string, int>> SimdVectorOutputArrays =
+        new(StringComparer.Ordinal)
+        {
+            // Body::GetSleepTestPoints (3) and PlaneShape::GetVertices (4) also take Vec3 output
+            // arrays but are private, so they are not bound.
+            // Copies mNumPoints (at most 4, the size of mY/mP/mQ) simplex points.
+            ["JPH::GJKClosestPoint::GetClosestPointsSimplex"] = new(StringComparer.Ordinal)
+            {
+                ["outY"] = 4,
+                ["outP"] = 4,
+                ["outQ"] = 4
+            }
+        };
+
     private static void IgnoreSimdVectorPointerFunctions(BindingCompilation compilation)
     {
         foreach (var function in compilation.Functions.Where(static function =>
             function.Parameters.Any(static parameter => IsSimdVectorPointer(parameter.CppTypeName))))
         {
+            if (TryConfigureSimdVectorOutputArrays(function))
+                continue;
+
             function.SetIgnoreReason(
                 "raw Vec3 pointer is an array whose native SIMD layout does not match the " +
                 "projected JoltVector3Abi; use the JPH::Array<Vec3> overload instead");
         }
     }
+
+    private static bool TryConfigureSimdVectorOutputArrays(FunctionBinding function)
+    {
+        if (!SimdVectorOutputArrays.TryGetValue(function.CppQualifiedName, out var minimumLengths))
+            return false;
+
+        var pointerParameters = function.Parameters
+            .Where(static parameter => IsSimdVectorPointer(parameter.CppTypeName))
+            .ToList();
+        if (!pointerParameters.All(parameter =>
+                !IsConstPointer(parameter.CppTypeName) && minimumLengths.ContainsKey(parameter.NativeName)))
+        {
+            return false;
+        }
+
+        foreach (var parameter in pointerParameters)
+            parameter.SetMetadata(MetadataKeys.MinimumSpanLength, minimumLengths[parameter.NativeName]);
+        return true;
+    }
+
+    private static bool IsConstPointer(string cppTypeName) =>
+        cppTypeName.Trim().StartsWith("const ", StringComparison.Ordinal);
 
     private static bool IsSimdVectorPointer(string cppTypeName)
     {

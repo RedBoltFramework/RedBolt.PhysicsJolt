@@ -204,6 +204,15 @@ struct Marshaller<const JPH::Vec3&> : ProjectedValueConstReferenceMarshallerBase
 template <>
 struct Marshaller<JPH::Vec3&> : ProjectedValueReferenceMarshallerBase<JPH::Vec3> {};
 
+// Mutable Vec3 output arrays (GJKClosestPoint::GetClosestPointsSimplex) bind as
+// Span<BaseRealVector3<float>>; the element count crosses the ABI in-band. JoltGenerator allow-lists the functions that take this
+// projection and sets the per-parameter minimum span length; all other Vec3 pointers stay ignored.
+template <>
+struct [[sharpcpp::managed_type(
+    public_type = "global::System.Span<global::RedBolt.Math.BaseRealVector3<float>>",
+    managed_marshaller = "global::SharpCpp.Support.SpanAbiMarshaller<>"
+)]] Marshaller<JPH::Vec3*> : ProjectedValueSpanMarshallerBase<JPH::Vec3> {};
+
 template <>
 struct [[sharpcpp::managed_type(
     public_type = "global::RedBolt.Math.Quaternion",
