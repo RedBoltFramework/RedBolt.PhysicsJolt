@@ -91,15 +91,20 @@ internal sealed class JoltGenerator(string nativeLibraryName)
     // ProjectedValue(Const)ReferenceMarshallerBase, and array overloads (JPH::Array<Vec3>) remain.
     //
     // Float4*/Double3* are layout-compatible with their ABI structs and stay bound through the
-    // generic pointer fallback. Every function with a Vec3/RVec3/Vec4/DVec3/UVec4/DMat44 pointer parameter is
-    // therefore ignored by default. The one
-    // exception is SimdVectorOutputArrays, an explicit allow-list of fixed-size output arrays
-    // keyed by qualified function name and parameter name. A mutable Vec3* binds as
-    // Span<BaseRealVector3<float>> through Marshaller<JPH::Vec3*> (JoltMarshallers.hpp), and the
-    // listed minimum length (the number of elements native code writes) is enforced by the
-    // generated wrapper with an ArgumentException. A function is only bound when every Vec3
-    // pointer parameter is mutable and listed; const Vec3* parameters and anything unlisted keep
-    // the whole function ignored. RVec3 is Vec3 because JPH_DOUBLE_PRECISION is not set.
+    // generic pointer fallback. Every function with a Vec3/RVec3/Vec4/DVec3/UVec4/DMat44 pointer
+    // parameter is therefore ignored by default. The one exception is SimdVectorArrays, an explicit
+    // allow-list of fixed-size arrays keyed by qualified function name and parameter name. A mutable
+    // Vec3* binds as Span<BaseRealVector3<float>> and a const Vec3* as
+    // ReadOnlySpan<BaseRealVector3<float>> through Marshaller<JPH::Vec3*> and
+    // Marshaller<const JPH::Vec3*> (JoltMarshallers.hpp). The listed minimum length (the number of
+    // elements native code reads or writes) is enforced by the generated wrapper with an
+    // ArgumentException. A function is only bound when every SIMD pointer parameter is listed;
+    // anything unlisted keeps the whole function ignored. Only Vec3/RVec3 array marshallers exist,
+    // so list nothing else. RVec3 is Vec3 because JPH_DOUBLE_PRECISION is not set.
+    //
+    // ConvexHullShapeSettings(const Vec3* inPoints, int inNumPoints, ...) stays ignored on purpose:
+    // the array length is the separate inNumPoints parameter, which a fixed minimum length cannot
+    // express, and the JPH::Array<Vec3> overload already covers it.
     private static readonly HashSet<string> SimdVectorPointees = new(StringComparer.Ordinal)
     {
         "JPH::Vec3",
@@ -110,11 +115,16 @@ internal sealed class JoltGenerator(string nativeLibraryName)
         "JPH::DMat44"
     };
 
-    private static readonly Dictionary<string, Dictionary<string, int>> SimdVectorOutputArrays =
+    private static readonly Dictionary<string, Dictionary<string, int>> SimdVectorArrays =
         new(StringComparer.Ordinal)
         {
             // Body::GetSleepTestPoints (3) and PlaneShape::GetVertices (4) also take Vec3 output
             // arrays but are private, so they are not bound.
+            // Reads exactly 3 sleep-test sphere points.
+            ["JPH::MotionProperties::ResetSleepTestSpheres"] = new(StringComparer.Ordinal)
+            {
+                ["inPoints"] = 3
+            },
             // Copies mNumPoints (at most 4, the size of mY/mP/mQ) simplex points.
             ["JPH::GJKClosestPoint::GetClosestPointsSimplex"] = new(StringComparer.Ordinal)
             {
@@ -129,7 +139,7 @@ internal sealed class JoltGenerator(string nativeLibraryName)
         foreach (var function in compilation.Functions.Where(static function =>
             function.Parameters.Any(static parameter => IsSimdVectorPointer(parameter.CppTypeName))))
         {
-            if (TryConfigureSimdVectorOutputArrays(function))
+            if (TryConfigureSimdVectorArrays(function))
                 continue;
 
             function.SetIgnoreReason(
@@ -138,16 +148,16 @@ internal sealed class JoltGenerator(string nativeLibraryName)
         }
     }
 
-    private static bool TryConfigureSimdVectorOutputArrays(FunctionBinding function)
+    private static bool TryConfigureSimdVectorArrays(FunctionBinding function)
     {
-        if (!SimdVectorOutputArrays.TryGetValue(function.CppQualifiedName, out var minimumLengths))
+        if (!SimdVectorArrays.TryGetValue(function.CppQualifiedName, out var minimumLengths))
             return false;
 
         var pointerParameters = function.Parameters
             .Where(static parameter => IsSimdVectorPointer(parameter.CppTypeName))
             .ToList();
         if (!pointerParameters.All(parameter =>
-                !IsConstPointer(parameter.CppTypeName) && minimumLengths.ContainsKey(parameter.NativeName)))
+                minimumLengths.ContainsKey(parameter.NativeName)))
         {
             return false;
         }
@@ -156,9 +166,6 @@ internal sealed class JoltGenerator(string nativeLibraryName)
             parameter.SetMetadata(MetadataKeys.MinimumSpanLength, minimumLengths[parameter.NativeName]);
         return true;
     }
-
-    private static bool IsConstPointer(string cppTypeName) =>
-        cppTypeName.Trim().StartsWith("const ", StringComparison.Ordinal);
 
     private static bool IsSimdVectorPointer(string cppTypeName)
     {
