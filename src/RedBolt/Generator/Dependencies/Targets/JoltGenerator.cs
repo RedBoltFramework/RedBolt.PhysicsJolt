@@ -47,17 +47,6 @@ internal sealed class JoltGenerator(string nativeLibraryName)
         "JPH::PhysicsUpdateContext"
     };
 
-    // JPH::Triangle stores its vertices in a fixed-size Float3[3] field. SharpCpp's fixed-array
-    // field binding currently only supports elements that are bound record types, not a
-    // projected value type with a namespace-qualified public_type (such as Float3, now mapped to
-    // RedBolt.Math.Float3): it emits an invalid managed marshaller type name for the element
-    // accessor. Triangle/TriangleList are not used anywhere in RedBolt; ignore them rather than
-    // changing SharpCpp's generator.
-    private static readonly HashSet<string> UnsupportedFixedArrayFieldRecords = new(StringComparer.Ordinal)
-    {
-        "JPH::Triangle"
-    };
-
     private static readonly IReadOnlyDictionary<string, FixedWidthAliasProjection> FixedWidthAliases =
         new Dictionary<string, FixedWidthAliasProjection>(StringComparer.Ordinal)
         {
@@ -86,10 +75,6 @@ internal sealed class JoltGenerator(string nativeLibraryName)
             SimdStorageRecords,
             "SIMD storage type differs between the generator parse and the native build");
         IgnoreRecordTree(compilation, InternalRecords, "internal PhysicsSystem job state");
-        IgnoreRecordTree(
-            compilation,
-            UnsupportedFixedArrayFieldRecords,
-            "fixed-size array field of a projected value type is not supported by SharpCpp's binding generator");
     }
 
     protected override IEnumerable<string> GetAdditionalMarshallerHeaders(GeneratorOptions options)
