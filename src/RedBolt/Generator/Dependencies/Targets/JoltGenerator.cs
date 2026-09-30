@@ -41,6 +41,13 @@ internal sealed class JoltGenerator(string nativeLibraryName)
         "JPH::BVec16::Type"
     };
 
+    // Internal Jolt job state (documented as internal to PhysicsSystem); its nested steps hold
+    // collections of non-copyable atomics. Nested records are ignored with their parent.
+    private static readonly HashSet<string> InternalRecords = new(StringComparer.Ordinal)
+    {
+        "JPH::PhysicsUpdateContext"
+    };
+
     private static readonly IReadOnlyDictionary<string, FixedWidthAliasProjection> FixedWidthAliases =
         new Dictionary<string, FixedWidthAliasProjection>(StringComparer.Ordinal)
         {
@@ -68,6 +75,7 @@ internal sealed class JoltGenerator(string nativeLibraryName)
             compilation,
             SimdStorageRecords,
             "SIMD storage type differs between the generator parse and the native build");
+        IgnoreRecordTree(compilation, InternalRecords, "internal PhysicsSystem job state");
         IgnoreSimdVectorPointerFunctions(compilation);
     }
 
