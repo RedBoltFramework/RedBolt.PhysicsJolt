@@ -1,0 +1,9 @@
+diff --git i/Jolt/Core/Core.h w/Jolt/Core/Core.h
+index b8adb6b5..1ccf8370 100644
+--- i/Jolt/Core/Core.h
++++ w/Jolt/Core/Core.h
+@@ -135 +135,3 @@
+-		#define JPH_USE_NEON
++		#if !defined(JPH_DISABLE_NEON)
++			#define JPH_USE_NEON
++		#endif

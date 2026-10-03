@@ -53,6 +53,7 @@ unset(CPM_VERSION CACHE)
 include("${REDBOLT_ROOT}/cmake/CPM.cmake")
 set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/deps")
 
+include("${REDBOLT_ROOT}/cmake/RedBoltCPM.cmake")
 include("${REDBOLT_ROOT}/cmake/RedBoltSharpCpp.cmake")
 
 set(OBJECT_LAYER_BITS 32 CACHE STRING "Use 16 collision layer and mask bits" FORCE)
@@ -74,12 +75,13 @@ set(JPH_USE_CPU_COMPUTE OFF CACHE BOOL "Disable Jolt CPU compute" FORCE)
 foreach(_redbolt_jolt_feature SSE4_1 SSE4_2 AVX AVX2 AVX512 LZCNT TZCNT F16C FMADD)
     set(USE_${_redbolt_jolt_feature} OFF CACHE BOOL "Build portable Jolt binaries" FORCE)
 endforeach()
-CPMAddPackage(
+redbolt_cpm_add_package(
     NAME JoltPhysics
     GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
     GIT_TAG 341ac92c7a8a63a4a37729ad6eca21f9a5a51e13
     CUSTOM_CACHE_KEY "."
     SOURCE_SUBDIR Build
+    PATCHES "${CMAKE_CURRENT_LIST_DIR}/extern/JoltPhysics.patch"
     EXCLUDE_FROM_ALL YES)
 set(REDBOLT_JOLT_SOURCE_ROOT "${JoltPhysics_SOURCE_DIR}" CACHE INTERNAL "Jolt Physics source root")
 redbolt_require_path("${REDBOLT_JOLT_SOURCE_ROOT}/Build/CMakeLists.txt" "Jolt Physics build")
