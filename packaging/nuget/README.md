@@ -1,6 +1,6 @@
 # RedBolt.PhysicsJolt NuGet packages
 
-RedBolt.PhysicsJolt versions independently from RedBolt, but every package records the exact base RedBolt version. Produce the matching base feed first in `../RedBolt/build/package/nuget/out`.
+RedBolt.PhysicsJolt versions independently from RedBolt, but every package records the exact base RedBolt version. Produce the matching base feed first in `<build root>/package/nuget/RedBolt/out` (`<build root>` is the monorepo `build/` inside the monorepo and the repository's own `build/` standalone; `REDBOLT_BUILD_ROOT` overrides it).
 
 Create Linux x64 packages from Release outputs, building the add-on first:
 
@@ -10,7 +10,7 @@ dotnet run --file packaging/nuget/package.cs -- create --rids linux-x64
 
 Use `--no-build` when all selected outputs already exist. Select additional prebuilt targets with a comma-separated list such as `--rids linux-x64,win-x64,android-x64,android-arm64,browser-wasm`. Override dependency version discovery only for an intentional local feed with `--redbolt-version VERSION`.
 
-The command writes independently versioned packages below `build/package/nuget/out`:
+The command writes independently versioned packages below `<build root>/package/nuget/RedBolt.PhysicsJolt/out`:
 
 - `RedBolt.PhysicsJolt`
 - `RedBolt.PhysicsJolt.Network`
