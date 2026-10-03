@@ -21,9 +21,9 @@ return ExternalModulePackager.Run(args, new ExternalModulePackageManifest
         new("PhysicsJolt.Network/RedBolt.PhysicsJolt.Network.csproj", BuildWhen.Linux, true, "-p:BuildProjectReferences=false"),
         new("PhysicsJolt/RedBolt.PhysicsJolt.csproj", BuildWhen.Windows, false,
             "-p:RedBoltPlatform=win-x64"),
-        new("Sample/Web/RedBolt.Sample.Web.csproj", BuildWhen.Web, false, "-p:RedBoltEnablePlatforms=web"),
+        new("Sample/Web/RedBolt.Sample.Web.csproj", BuildWhen.Web, false, "-p:RedBoltEnable=linux-x64%2cbrowser-wasm"),
         new("Sample/Android/RedBolt.Sample.Android.csproj", BuildWhen.Android, false,
-            "--framework", "net10.0-android", "-p:RedBoltEnablePlatforms=android", "-p:RedBoltEnableArchitectures=all")
+            "--framework", "net10.0-android", "-p:RedBoltEnable=linux-x64%2candroid")
     ],
     ManagedPackages =
     [
