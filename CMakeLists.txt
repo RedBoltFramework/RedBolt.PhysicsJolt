@@ -55,6 +55,7 @@ set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/deps")
 
 include("${REDBOLT_ROOT}/cmake/RedBoltCPM.cmake")
 include("${REDBOLT_ROOT}/cmake/RedBoltSharpCpp.cmake")
+include("${REDBOLT_ROOT}/cmake/RedBoltNativeModuleManifest.cmake")
 
 set(OBJECT_LAYER_BITS 32 CACHE STRING "Use 16 collision layer and mask bits" FORCE)
 set(JPH_BUILD_SHARED_LIBS OFF CACHE BOOL "Build Jolt statically" FORCE)
@@ -139,14 +140,19 @@ if(WIN32)
     set_target_properties(redbolt-physics-jolt-native-jolt PROPERTIES PREFIX "")
 endif()
 
-if(NOT EMSCRIPTEN)
-    file(GENERATE
-        OUTPUT "${REDBOLT_GENERATED_ROOT}/native-modules/JOLT.json"
-        CONTENT "{\n  \"module\": \"JOLT\",\n  \"managedSelector\": \"RedBolt.Bindings.Jolt\",\n  \"nativeLibrary\": \"RedBolt.Native.Jolt\",\n  \"requires\": [],\n  \"requirementClosure\": [],\n  \"artifacts\": [\"$<TARGET_FILE_NAME:redbolt-physics-jolt-native-jolt>\"]\n}\n")
-endif()
+redbolt_write_native_module_manifest(
+    MODULE JOLT
+    TARGET redbolt-physics-jolt-native-jolt
+    SELECTOR RedBolt.Bindings.Jolt
+    LIBRARY_NAME RedBolt.Native.Jolt
+    OUTPUT_DIR "${REDBOLT_GENERATED_ROOT}/native-modules")
 
 add_custom_target(redbolt-physics-jolt-native-all DEPENDS redbolt-physics-jolt-native-jolt)
 add_custom_target(redbolt-physics-jolt-android-native DEPENDS redbolt-physics-jolt-native-jolt)
+if(NOT EMSCRIPTEN)
+    add_dependencies(redbolt-physics-jolt-native-all redbolt-physics-jolt-native-jolt-module)
+    add_dependencies(redbolt-physics-jolt-android-native redbolt-physics-jolt-native-jolt-module)
+endif()
 
 if(EMSCRIPTEN)
     set(REDBOLT_PHYSICS_JOLT_WASM_ARCHIVE "${CMAKE_BINARY_DIR}/lib/Release/wasm/RedBolt.PhysicsJolt.Native.Web.a")
