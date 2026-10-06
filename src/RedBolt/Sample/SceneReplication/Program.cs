@@ -567,8 +567,8 @@ public sealed class SceneReplication : Application
         {
             _server = new DataChannelServer();
             _server.SetConnectionFactory(static () => new ReplicatedDataChannelConnection());
-            _server.Connected += HandleServerConnected;
-            _server.Disconnected += HandleServerDisconnected;
+            _server.OnConnected += HandleServerConnected;
+            _server.OnDisconnected += HandleServerDisconnected;
         }
         _scene!.GetComponent<ReplicationManager>()!.StartServer();
         _server.Listen(new URL($"ws://0.0.0.0:{ServerPort}"));

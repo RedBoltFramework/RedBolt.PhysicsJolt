@@ -544,8 +544,8 @@ public sealed class AdvancedNetworking : Application
         StopNetworking();
         _server = new DataChannelServer();
         _server.SetConnectionFactory(static () => new AdvancedNetworkingConnection());
-        _server.Connected += HandleServerConnected;
-        _server.Disconnected += HandleServerDisconnected;
+        _server.OnConnected += HandleServerConnected;
+        _server.OnDisconnected += HandleServerDisconnected;
         _scene!.GetComponent<ReplicationManager>()!.StartServer();
         if (!_server.Listen(new URL($"ws://0.0.0.0:{ServerPort}")))
         {
@@ -585,8 +585,8 @@ public sealed class AdvancedNetworking : Application
 
         if (_server is not null)
         {
-            _server.Connected -= HandleServerConnected;
-            _server.Disconnected -= HandleServerDisconnected;
+            _server.OnConnected -= HandleServerConnected;
+            _server.OnDisconnected -= HandleServerDisconnected;
             foreach (var connection in _serverConnections.Keys.ToArray())
             {
                 connection.OnMessageReceived -= HandleServerMessage;
