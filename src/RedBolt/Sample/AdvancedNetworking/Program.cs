@@ -563,7 +563,7 @@ public sealed class AdvancedNetworking : Application
             address = "localhost";
         _clientConnection = new AdvancedNetworkingConnection();
         _clientConnection.ReplicationPeer.SetReplicationManager(_scene!.GetComponent<ReplicationManager>());
-        _clientConnection.MessageReceived += HandleClientMessage;
+        _clientConnection.OnMessageReceived += HandleClientMessage;
         if (!_clientConnection.Connect(new URL(address.Contains("://", StringComparison.Ordinal)
                 ? address
                 : $"ws://{address}:{ServerPort}")))
@@ -577,7 +577,7 @@ public sealed class AdvancedNetworking : Application
     {
         if (_clientConnection is not null)
         {
-            _clientConnection.MessageReceived -= HandleClientMessage;
+            _clientConnection.OnMessageReceived -= HandleClientMessage;
             _clientConnection.Disconnect();
             _clientConnection.Dispose();
             _clientConnection = null;
@@ -589,7 +589,7 @@ public sealed class AdvancedNetworking : Application
             _server.Disconnected -= HandleServerDisconnected;
             foreach (var connection in _serverConnections.Keys.ToArray())
             {
-                connection.MessageReceived -= HandleServerMessage;
+                connection.OnMessageReceived -= HandleServerMessage;
                 connection.ControlledObject?.Remove();
                 connection.ControlledObject = null;
                 connection.Disconnect();
@@ -608,7 +608,7 @@ public sealed class AdvancedNetworking : Application
     {
         var advancedConnection = (AdvancedNetworkingConnection)connection;
         advancedConnection.ReplicationPeer.SetReplicationManager(_scene!.GetComponent<ReplicationManager>());
-        advancedConnection.MessageReceived += HandleServerMessage;
+        advancedConnection.OnMessageReceived += HandleServerMessage;
         advancedConnection.ControlledObject = CreateControllableObject(advancedConnection.ReplicationPeer);
         _serverConnections.Add(advancedConnection, advancedConnection.ControlledObject);
     }
@@ -616,7 +616,7 @@ public sealed class AdvancedNetworking : Application
     private void HandleServerDisconnected(NetworkServer server, NetworkConnection connection)
     {
         var advancedConnection = (AdvancedNetworkingConnection)connection;
-        advancedConnection.MessageReceived -= HandleServerMessage;
+        advancedConnection.OnMessageReceived -= HandleServerMessage;
         advancedConnection.ControlledObject?.Remove();
         advancedConnection.ControlledObject = null;
         _serverConnections.Remove(advancedConnection);
