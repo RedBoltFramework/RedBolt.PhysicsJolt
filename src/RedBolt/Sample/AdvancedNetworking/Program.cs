@@ -768,8 +768,7 @@ public sealed class AdvancedNetworking : Application
         data.WritePackedVector3(aimPosition, VectorBinaryEncoding.Double);
         WriteNetworkTime(data, clientReplica.ReplicaTime);
         WriteNetworkTime(data, clientReplica.InputTime);
-        using var message = new MemoryBuffer(data);
-        _clientConnection.SendMessage(RaycastMessage, message, PacketType.UnreliableUnordered);
+        _clientConnection.SendMessage(RaycastMessage, data.Buffer, PacketType.UnreliableUnordered);
     }
 
     private Vector3d GetAimPosition(Vector3d playerPosition, Ray screenRay)
@@ -806,8 +805,18 @@ public sealed class AdvancedNetworking : Application
         return query.Result.Count != 0 ? query.Result[0].Position : null;
     }
 
-    private void HandleServerMessage(NetworkConnection connection, NetworkMessageId messageId,
-        MemoryBuffer message, ref bool handled)
+    private unsafe void HandleServerMessage(NetworkConnection connection,
+        NetworkMessageId messageId, ReadOnlySpan<byte> messagePayload, ref bool handled)
+    {
+        fixed (byte* pointer = messagePayload)
+        {
+            using var message = new MemoryBuffer((nint)pointer, (uint)messagePayload.Length, true);
+            ProcessServerMessage(connection, messageId, message, ref handled);
+        }
+    }
+
+    private void ProcessServerMessage(NetworkConnection connection,
+        NetworkMessageId messageId, MemoryBuffer message, ref bool handled)
     {
         if (handled || messageId != RaycastMessage)
             return;
@@ -870,12 +879,21 @@ public sealed class AdvancedNetworking : Application
         if (query.Result.Count != 0)
             data.WritePackedVector3(_scene.ToAbsoluteWorldPosition(query.Result[0].Position),
                 VectorBinaryEncoding.Double);
-        using var message = new MemoryBuffer(data);
-        item.Connection.SendMessage(RayHitMessage, message, PacketType.UnreliableUnordered);
+        item.Connection.SendMessage(RayHitMessage, data.Buffer, PacketType.UnreliableUnordered);
     }
 
-    private void HandleClientMessage(NetworkConnection connection, NetworkMessageId messageId,
-        MemoryBuffer message, ref bool handled)
+    private unsafe void HandleClientMessage(NetworkConnection connection,
+        NetworkMessageId messageId, ReadOnlySpan<byte> messagePayload, ref bool handled)
+    {
+        fixed (byte* pointer = messagePayload)
+        {
+            using var message = new MemoryBuffer((nint)pointer, (uint)messagePayload.Length, true);
+            ProcessClientMessage(connection, messageId, message, ref handled);
+        }
+    }
+
+    private void ProcessClientMessage(NetworkConnection connection,
+        NetworkMessageId messageId, MemoryBuffer message, ref bool handled)
     {
         if (handled || messageId != RayHitMessage)
             return;
