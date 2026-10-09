@@ -8,6 +8,6 @@ The source build expects RedBolt in `../RedBolt` by default. Override `RedBoltRo
 dotnet build RedBolt.PhysicsJolt.slnx --configuration Debug
 ```
 
-Desktop, WebAssembly, and Android samples are included under `src/RedBolt/Sample`. Generated and native outputs remain below this repository's `build/` tree.
+Desktop, WebAssembly, and Android samples are included under `src/RedBolt/Sample`. Generated and native outputs remain below the `build/` directory beside the engine directory.
 
 Tests remain in the sibling `RedBolt.Tests` repository. See [building](doc/BUILDING.md), [package production](packaging/nuget/README.md), and the [physics-specific deviations](doc/ALLOWED_DEVIATIONS.md).
