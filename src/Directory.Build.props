@@ -22,7 +22,6 @@ For a copy, see <https://opensource.org/licenses/MIT> or the accompanying LICENS
     <RedBoltExternalHasNative>true</RedBoltExternalHasNative>
     <RedBoltExternalNativeTargetPrefix>redbolt-physics-jolt</RedBoltExternalNativeTargetPrefix>
     <RedBoltExternalEnabledNativeModules>JOLT</RedBoltExternalEnabledNativeModules>
-    <RedBoltExternalDesktopResourceRoot>$(RedBoltRoot)</RedBoltExternalDesktopResourceRoot>
   </PropertyGroup>
   <Import Project="$(RedBoltRoot)/eng/RedBolt.ModuleBuild/Directory.Build.props" />
 </Project>
